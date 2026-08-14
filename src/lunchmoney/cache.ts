@@ -30,4 +30,11 @@ export class Cache {
   clear(): void {
     this.entries.clear()
   }
+
+  /** Drop everything under a key prefix — used after a write. */
+  invalidate(prefix: string): void {
+    for (const key of this.entries.keys()) {
+      if (key.startsWith(prefix)) this.entries.delete(key)
+    }
+  }
 }

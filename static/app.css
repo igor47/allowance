@@ -1,0 +1,57 @@
+/* A few things Bootstrap does not give us. */
+
+.hero-number {
+  font-size: clamp(2.75rem, 9vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-number {
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dense enough to triage a fortnight of transactions without scrolling forever. */
+.txn-table td,
+.txn-table th {
+  padding: 0.4rem 0.5rem;
+  vertical-align: middle;
+}
+
+.txn-table tr.unreviewed {
+  border-left: 3px solid var(--bs-warning);
+}
+
+.txn-table tr.not-counted {
+  opacity: 0.55;
+}
+
+.tag-btn {
+  --bs-btn-padding-y: 0.1rem;
+  --bs-btn-padding-x: 0.4rem;
+  --bs-btn-font-size: 0.72rem;
+}
+
+.htmx-request .tag-group {
+  opacity: 0.4;
+}
+
+.sparkline {
+  width: 100%;
+  height: 90px;
+  display: block;
+}

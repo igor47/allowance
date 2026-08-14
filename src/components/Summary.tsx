@@ -145,12 +145,18 @@ export const Boxes = ({ dashboard }: { dashboard: Dashboard }) => {
       <Stat
         label="Accruing now"
         value={money(card.current.total.net)}
-        detail={
-          drift && Math.abs(drift.delta) > 1
-            ? `Bank says ${money(drift.reported)} owed · ${money(Math.abs(drift.delta))} unexplained`
-            : `Next statement closes ${longDate(card.current.closes)}`
-        }
+        detail={`Next statement closes ${longDate(card.current.closes)}`}
       />
+      {drift && Math.abs(drift.delta) > 1 ? (
+        <div class="col-12">
+          <p class="small text-secondary mb-0">
+            Chase reports {money(drift.reported)} owed against {money(drift.reconstructed)}{" "}
+            reconstructed here — {money(Math.abs(drift.delta))} of drift. Expected, not alarming:
+            Plaid dates a charge when it is made, Chase bills it when it posts, and the most recent
+            day or two has usually not synced yet.
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

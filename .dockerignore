@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+docs
+scripts
+src/**/*.test.ts
+src/**/*.test.tsx
+src/test
+mise.local.toml
+*.log

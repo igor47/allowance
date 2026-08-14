@@ -97,6 +97,30 @@ describe("negative amounts", () => {
     expect(classify(payroll).counts).toBe(false)
   })
 
+  test("a card autopay leaving the bank account is not a review item", () => {
+    // $4,200.00 out of Fidelity every month. It is the Chase bill being paid,
+    // not spending, and it should never appear in the queue.
+    const autopay = txn({
+      account_display_name: "Checking",
+      amount: "4200.00",
+      payee: "DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)",
+      category_name: "Credit card payment",
+    })
+    const result = classify(autopay)
+    expect(result.bucket).toBe("excluded")
+    expect(result.counts).toBe(false)
+  })
+
+  test("rent stays a review item, since it is not a transfer", () => {
+    const rent = txn({
+      account_display_name: "Checking",
+      amount: "1500.00",
+      payee: "A Property Manager",
+      category_name: "Rent",
+    })
+    expect(classify(rent).bucket).toBe("assumed-fixed")
+  })
+
   test("transfers excluded from totals never count", () => {
     expect(classify(txn({ amount: "-100.00", exclude_from_totals: true })).counts).toBe(false)
   })

@@ -149,6 +149,12 @@ export function classify(txn: LmTransaction): Classification {
 
   if (amount === 0) return EXCLUDED("zero amount", amount)
 
+  // Card autopays and transfers leave a fixed-cost account as positive
+  // amounts. They are not spending and never will be, so keep them out of the
+  // review queue rather than asking about the same $14k debit every day.
+  if (policy === "default-out" && looksLikeSettlement(txn))
+    return EXCLUDED("card payment or transfer", amount)
+
   if (policy === "default-in")
     return {
       bucket: "spending",

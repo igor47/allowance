@@ -80,11 +80,15 @@ describe("tagging", () => {
   test("person tags leave the classification alone", async () => {
     const { client, target } = await findUnreviewed()
     const app = useTestApp(client)
+
+    // The recorded data now carries real igor/serena tags, so count the delta
+    // rather than assuming this is the only one.
+    const before = (await dom(await app.get("/?filter=serena"))).querySelectorAll("tbody tr").length
     await app.post(`/transactions/${target.id}/tag?tag=serena`)
     expect(client.writes.at(-1)?.tags).toEqual(["serena"])
 
-    const page = await dom(await app.get("/?filter=serena"))
-    expect(page.querySelectorAll("tbody tr")).toHaveLength(1)
+    const after = (await dom(await app.get("/?filter=serena"))).querySelectorAll("tbody tr").length
+    expect(after).toBe(before + 1)
   })
 
   test("unknown tags are refused before any write", async () => {

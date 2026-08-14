@@ -28,6 +28,8 @@ export interface LmTransaction {
   asset_display_name: string | null
   institution_name: string | null
   tags: LmTag[]
+  /** Plaid's raw payload as a JSON string. See details.ts. */
+  plaid_metadata?: string | null
 }
 
 export interface LmPlaidAccount {
@@ -44,6 +46,11 @@ export interface LmPlaidAccount {
   to_base: number
   currency: string
   balance_last_update: string
+  /** When transactions were last imported from Plaid. */
+  last_import: string | null
+  /** When Lunch Money last asked Plaid for anything. */
+  last_fetch: string | null
+  plaid_last_successful_update: string | null
 }
 
 export interface LunchMoneyClient {

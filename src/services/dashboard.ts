@@ -9,7 +9,7 @@ import {
 } from "../domain/allowance"
 import { type CycleTotal, cycleTotal, reconciliation, STATEMENT_ACCOUNT } from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
-import type { IsoDate } from "../domain/dates"
+import { addDays, type IsoDate } from "../domain/dates"
 import { unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
 import type { LmPlaidAccount, LunchMoneyClient } from "../lunchmoney/types"
@@ -39,6 +39,9 @@ export interface Dashboard {
   needsReview: number
   unknownAccounts: string[]
 }
+
+/** Chase posts a charge up to four days after it is authorized. */
+const POSTING_SLACK_DAYS = 5
 
 export class DashboardService {
   constructor(
@@ -70,10 +73,17 @@ export class DashboardService {
     const cycles = cycleView(today, statementCloseDay, statementDueDay)
 
     // One fetch covering both the budgeting period and the open statement.
-    const start =
+    //
+    // The API filters on the Lunch Money date — Plaid's *authorized* date —
+    // while statement cycles are bucketed by the posted date, which lags by up
+    // to four days. Without the slack, a charge swiped just before a cycle
+    // opened but posted just after it is missing from the statement total,
+    // which understated the August bill by $303.
+    const earliest =
       allowance.periodStart < cycles.lastClosed.start
         ? allowance.periodStart
         : cycles.lastClosed.start
+    const start = addDays(earliest, -POSTING_SLACK_DAYS)
     const { transactions, accounts } = await this.load(start, today)
 
     const classified = classifyAll(transactions)

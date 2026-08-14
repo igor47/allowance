@@ -3,10 +3,19 @@
  * "still accruing".
  *
  * This is a different question from the allowance: the bill includes recurring
- * and irregular charges too. So it ignores the tag buckets entirely and sums
+ * and irregular charges too, so it ignores the tag buckets entirely and sums
  * everything on the card except payments.
+ *
+ * Cycles are bucketed by *posted* date, not the Lunch Money date. Lunch Money
+ * reports Plaid's authorized date — when the card was swiped — and Chase bills
+ * on the date the charge posts, one or two days later. Using the posted date
+ * matches the statement exactly: the 06/13-07/12 cycle sums to $4,200.00
+ * against a statement reading Purchases $4,200.00, and the cycle before it
+ * matches that statement's Previous Balance. Using the Lunch Money date is off
+ * by a few hundred dollars a month.
  */
 
+import { postedDate } from "../lunchmoney/details"
 import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { IsoDate } from "./dates"
@@ -38,7 +47,8 @@ export function cycleTotal(
 ): CycleTotal {
   const total = { ...EMPTY }
   for (const txn of txns) {
-    if (txn.date < start || txn.date > end) continue
+    const posted = postedDate(txn)
+    if (posted < start || posted > end) continue
     if (!isCardCharge(txn, account)) continue
     const amount = Number.parseFloat(txn.amount)
     if (amount > 0) total.charges += amount
@@ -50,12 +60,12 @@ export function cycleTotal(
 }
 
 /**
- * How far the reconstructed balance is from what the bank reports.
+ * The gap between what Chase says is owed and what the transactions add up to.
  *
- * The two do not currently agree — the cycle sums are a few hundred dollars off
- * the payments, and the Plaid balance is off the reconstruction by more. Rather
- * than quietly pick one, both are shown with the gap between them, so drift is
- * visible the day it appears instead of being discovered in a statement.
+ * Not shown on the dashboard — with posted-date bucketing the statement figure
+ * is exact, and the residual is just activity Plaid has not imported yet, which
+ * the sync line already explains in terms a person can act on. Kept because a
+ * gap that grows month over month would mean something is genuinely missing.
  */
 export function reconciliation(reported: number, reconstructed: number) {
   return { reported, reconstructed, delta: reported - reconstructed }

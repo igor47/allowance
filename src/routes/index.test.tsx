@@ -32,6 +32,15 @@ describe("dashboard", () => {
     expect(page.querySelectorAll("tr.unreviewed").length).toBeGreaterThan(0)
   })
 
+  test("the statement total includes charges that posted after the cycle opened", async () => {
+    // The fetch window has to reach back past the cycle start, since the API
+    // filters on the authorized date and the cycle is bucketed on the posted
+    // date. Without the slack this number comes out several hundred short.
+    const page = await dom(await useTestApp().get("/"))
+    const due = page.querySelectorAll("#boxes .stat-number")[1]?.textContent
+    expect(due).toBe("$14,927")
+  })
+
   test("filters narrow the feed", async () => {
     const { get } = useTestApp()
     const all = await dom(await get("/transactions?filter=all"))

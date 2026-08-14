@@ -13,7 +13,11 @@ export interface Config {
   port: number
   timezone: string
   lunchMoneyApiKey: string
-  /** Seconds to hold API responses in memory. Their rate limit is aggressive. */
+  /**
+   * Seconds to hold API responses in memory. Their rate limit is aggressive and
+   * transactions only change when Plaid imports, so this can be generous —
+   * tag writes patch the cache rather than waiting for it to expire.
+   */
   cacheTtlSeconds: number
   allowance: AllowanceConfig
   /** Ask Lunch Money to pull from Plaid if it has not for this long. */
@@ -36,7 +40,7 @@ export const config: Config = {
   port: int("PORT", 3005),
   timezone: process.env.DISPLAY_TZ ?? "America/Los_Angeles",
   lunchMoneyApiKey: process.env.LUNCHMONEY_API_KEY ?? "",
-  cacheTtlSeconds: int("CACHE_TTL_SECONDS", 60),
+  cacheTtlSeconds: int("CACHE_TTL_SECONDS", 300),
   allowance: {
     periodStart: process.env.PERIOD_START ?? "2026-08-01",
     dailyTarget: int("DAILY_TARGET", 200),

@@ -31,10 +31,22 @@ export class Cache {
     this.entries.clear()
   }
 
-  /** Drop everything under a key prefix — used after a write. */
+  /** Drop everything under a key prefix. */
   invalidate(prefix: string): void {
     for (const key of this.entries.keys()) {
       if (key.startsWith(prefix)) this.entries.delete(key)
+    }
+  }
+
+  /**
+   * Rewrite cached values in place, keeping their expiry.
+   *
+   * This is how a write stays cheap: after tagging one transaction there is no
+   * reason to re-download the window it lives in.
+   */
+  mutate<T>(prefix: string, update: (value: T) => T): void {
+    for (const [key, entry] of this.entries) {
+      if (key.startsWith(prefix)) entry.value = update(entry.value as T)
     }
   }
 }

@@ -12,7 +12,10 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
     this.accounts = accounts
   }
 
+  reads = 0
+
   async transactions(start: string, end: string): Promise<LmTransaction[]> {
+    this.reads += 1
     return this.store.filter((t) => t.date >= start && t.date <= end)
   }
 

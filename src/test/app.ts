@@ -12,8 +12,12 @@ export const TEST_CONFIG = {
   allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
 }
 
-export function useTestApp(client = new FakeLunchMoneyClient()) {
-  const app = createApp({ client, config: TEST_CONFIG, today: () => FIXTURE_TODAY })
+export function useTestApp(client = new FakeLunchMoneyClient(), cacheTtlSeconds = 0) {
+  const app = createApp({
+    client,
+    config: { ...TEST_CONFIG, cacheTtlSeconds },
+    today: () => FIXTURE_TODAY,
+  })
 
   const get = (path: string) => app.request(path)
   const post = (path: string) => app.request(path, { method: "POST" })

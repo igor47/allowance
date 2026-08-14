@@ -13,7 +13,7 @@ import { addDays, type IsoDate } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
 import { unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
-import type { LmPlaidAccount, LunchMoneyClient } from "../lunchmoney/types"
+import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
 
 export interface CashAccount {
   name: string
@@ -55,13 +55,25 @@ export class DashboardService {
   ) {}
 
   /**
-   * Writes go straight through to Lunch Money, then drop the transaction
-   * cache so the next render reflects them. Account balances are left alone —
-   * tagging cannot change them, and their fetch is the slower of the two.
+   * Write through to Lunch Money, then patch the cached copy in place.
+   *
+   * Re-reading the whole window after every tag click cost an extra ~300ms
+   * round trip and re-downloaded a thousand transactions to learn about one.
+   * Patching keeps a click at a single API call. The patch is applied after
+   * the write succeeds rather than before, so a failed write never leaves the
+   * dashboard showing a tag that Lunch Money does not have.
    */
   async setTags(transactionId: number, tags: string[]): Promise<void> {
     await this.client.setTags(transactionId, tags)
-    this.cache.invalidate("txns:")
+    const applied: LmTag[] = tags.map((name, i) => ({
+      id: -(i + 1),
+      name,
+      description: null,
+      archived: false,
+    }))
+    this.cache.mutate<LmTransaction[]>("txns:", (txns) =>
+      txns.map((t) => (t.id === transactionId ? { ...t, tags: applied } : t))
+    )
   }
 
   private async load(start: IsoDate, end: IsoDate) {

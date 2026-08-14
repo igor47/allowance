@@ -137,3 +137,28 @@ describe("sync", () => {
     expect(client.fetches).toBe(1)
   })
 })
+
+describe("caching", () => {
+  test("tagging patches the cache instead of re-reading the window", async () => {
+    const client = new FakeLunchMoneyClient()
+    const all = await client.transactions("2026-08-01", "2026-08-14")
+    const target = all.find(
+      (t) =>
+        t.account_display_name === "Card" && t.tags.length === 0 && !t.exclude_from_totals
+    )
+    if (!target) throw new Error("fixture has no untagged Chase spend")
+
+    // A cache that actually caches, so a tag write must not need a re-read.
+    const app = useTestApp(client, 300)
+    await app.get("/")
+    const readsBefore = client.reads
+    await app.post(`/transactions/${target.id}/tag?tag=spending`)
+    expect(client.reads).toBe(readsBefore)
+    expect(client.writes).toHaveLength(1)
+
+    // ...and the new tag is visible without going back to the API.
+    const page = await dom(await app.get("/?filter=spending"))
+    expect(page.querySelector(`#txn-${target.id}`)?.textContent).toContain("tagged spending")
+    expect(client.reads).toBe(readsBefore)
+  })
+})

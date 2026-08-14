@@ -1,0 +1,50 @@
+# Every recurring operation in this project is a mise task. See CLAUDE.md.
+[tools]
+bun = "latest"
+
+[env]
+PORT = "3005"
+DISPLAY_TZ = "America/Los_Angeles"
+
+[tasks.setup]
+description = "Install dependencies and vendor front-end assets"
+run = "bun install"
+
+[tasks.dev]
+description = "Dev server with hot reload"
+run = "bun run --watch main.ts"
+
+[tasks.start]
+description = "Run the server as production would"
+run = "NODE_ENV=production bun run main.ts"
+
+[tasks.check]
+description = "Lint + typecheck"
+run = """
+bun biome check src/ main.ts
+bun tsc --noEmit
+"""
+
+[tasks."check:fix"]
+description = "Auto-fix lint/formatting, then typecheck"
+run = """
+bun biome check --write src/ main.ts
+bun tsc --noEmit
+"""
+
+[tasks.test]
+description = "Run tests (offline; never touches the Lunch Money API)"
+run = "NODE_ENV=test bun test"
+
+[tasks."fixtures:record"]
+description = "Refresh test fixtures from the live Lunch Money API (manual only)"
+run = "bun run scripts/record-fixtures.ts"
+
+[tasks.smoke]
+description = "One-shot live API fetch + print, to eyeball real numbers (manual only)"
+run = "bun run scripts/smoke.ts"
+
+[tasks.publish]
+description = "Build and push the container image. Gated on check + test."
+depends = ["check", "test"]
+run = "bun run scripts/publish.ts"

@@ -1,0 +1,28 @@
+# dependencies (bun install)
+node_modules/
+
+# statically served FE dependencies
+static/htmx.min.js
+static/idiomorph-ext.min.js
+
+# output
+out
+dist
+*.tgz
+
+# logs
+logs
+*.log
+
+# secrets / local env
+.env
+.env.local
+mise.local.toml
+
+# caches
+.cache
+*.tsbuildinfo
+.biome
+
+.idea
+.DS_Store

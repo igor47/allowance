@@ -128,7 +128,6 @@ const Sparkline = ({ dashboard }: { dashboard: Dashboard }) => {
 
 export const Boxes = ({ dashboard }: { dashboard: Dashboard }) => {
   const { cash, card } = dashboard
-  const drift = card.reconciliation
 
   return (
     <div id="boxes" class="row row-cols-1 row-cols-md-3 g-3 mb-4" hx-swap-oob="true">
@@ -139,25 +138,19 @@ export const Boxes = ({ dashboard }: { dashboard: Dashboard }) => {
       />
       <Stat
         label={`Due ${shortDate(card.lastClosed.due)}`}
-        value={money(card.lastClosed.total.net)}
+        value={money(card.lastClosed.total.charges)}
         detail={`Statement closed ${longDate(card.lastClosed.end)}`}
         tone="text-warning"
       />
       <Stat
         label="Accruing now"
-        value={money(card.current.total.net)}
-        detail={`Next statement closes ${longDate(card.current.closes)}`}
+        value={money(card.current.total.charges)}
+        detail={
+          card.reported === null
+            ? `Next statement closes ${longDate(card.current.closes)}`
+            : `${money(card.reported)} on the card · next closes ${longDate(card.current.closes)}`
+        }
       />
-      {drift && Math.abs(drift.delta) > 1 ? (
-        <div class="col-12">
-          <p class="small text-secondary mb-0">
-            Chase reports {money(drift.reported)} owed against {money(drift.reconstructed)}{" "}
-            reconstructed here — {money(Math.abs(drift.delta))} of drift. Expected, not alarming:
-            Plaid dates a charge when it is made, Chase bills it when it posts, and the most recent
-            day or two has usually not synced yet.
-          </p>
-        </div>
-      ) : null}
     </div>
   )
 }

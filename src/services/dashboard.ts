@@ -178,12 +178,32 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
   return { total: cash.reduce((sum, a) => sum + a.balance, 0), accounts: cash }
 }
 
-/** Filters offered in the transaction feed. */
-export const FILTERS = ["review", "all", "spending", "fixed", "igor", "serena"] as const
+/** Filters offered in the transaction feed, in the order they are shown. */
+export const FILTERS = ["review", "spending", "all", "fixed", "igor", "serena"] as const
 export type Filter = (typeof FILTERS)[number]
 
 export function isFilter(value: string | undefined): value is Filter {
   return !!value && (FILTERS as readonly string[]).includes(value)
+}
+
+export interface FilterSummary {
+  count: number
+  /** Everything in the filtered set. */
+  total: number
+  /** The part of it that draws down the allowance. */
+  counting: number
+}
+
+export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
+  let total = 0
+  let counting = 0
+  for (const entry of entries) {
+    const amount = entry.classification.amount
+    if (entry.classification.bucket === "excluded") continue
+    total += amount
+    if (entry.classification.counts) counting += amount
+  }
+  return { count: entries.length, total, counting }
 }
 
 export function applyFilter(

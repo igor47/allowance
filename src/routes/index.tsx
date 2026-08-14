@@ -5,7 +5,7 @@ import { Allowance, Boxes, Sync } from "../components/Summary"
 import { TransactionList, TransactionRow } from "../components/Transactions"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
-import { applyFilter, isFilter } from "../services/dashboard"
+import { applyFilter, isFilter, summarise } from "../services/dashboard"
 
 export const dashboardRoutes = new Hono<AppEnv>()
 
@@ -17,6 +17,7 @@ const filterOf = (c: { req: { query(name: string): string | undefined } }) => {
 dashboardRoutes.get("/", async (c) => {
   const dashboard = await c.var.service.build(c.var.today())
   const filter = filterOf(c)
+  const entries = applyFilter(dashboard.transactions, filter)
 
   // Queue a pull if Lunch Money has not asked Plaid lately. Deliberately not
   // awaited: the fetch is a background job on their side, so blocking the
@@ -35,9 +36,10 @@ dashboardRoutes.get("/", async (c) => {
       <Allowance dashboard={dashboard} />
       <Boxes dashboard={dashboard} />
       <TransactionList
-        entries={applyFilter(dashboard.transactions, filter)}
+        entries={entries}
         filter={filter}
         needsReview={dashboard.needsReview}
+        summary={summarise(entries)}
       />
     </Layout>
   )
@@ -64,11 +66,13 @@ dashboardRoutes.post("/refresh", async (c) => {
 dashboardRoutes.get("/transactions", async (c) => {
   const dashboard = await c.var.service.build(c.var.today())
   const filter = filterOf(c)
+  const entries = applyFilter(dashboard.transactions, filter)
   return c.html(
     <TransactionList
-      entries={applyFilter(dashboard.transactions, filter)}
+      entries={entries}
       filter={filter}
       needsReview={dashboard.needsReview}
+      summary={summarise(entries)}
     />
   )
 })

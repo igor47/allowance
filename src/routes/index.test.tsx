@@ -162,3 +162,32 @@ describe("caching", () => {
     expect(client.reads).toBe(readsBefore)
   })
 })
+
+describe("row stability", () => {
+  test("a row keeps its shape whether or not it is tagged", async () => {
+    const client = new FakeLunchMoneyClient()
+    const all = await client.transactions("2026-08-01", "2026-08-14")
+    const target = all.find(
+      (t) =>
+        t.account_display_name === "Card" && t.tags.length === 0 && !t.exclude_from_totals
+    )
+    if (!target) throw new Error("fixture has no untagged Chase spend")
+
+    const app = useTestApp(client, 300)
+    const shape = (doc: Document) => {
+      const row = doc.querySelector(`[id="txn-${target.id}"]`)
+      return {
+        cells: row?.querySelectorAll("td").length,
+        lines: row?.querySelectorAll(".txn-line").length,
+        buttons: row?.querySelectorAll("button").length,
+      }
+    }
+
+    const before = shape(await dom(await app.get("/?filter=all")))
+    await app.post(`/transactions/${target.id}/tag?tag=spending`)
+    const after = shape(await dom(await app.get("/?filter=all")))
+
+    expect(before.lines).toBe(3)
+    expect(after).toEqual(before)
+  })
+})

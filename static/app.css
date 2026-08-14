@@ -56,6 +56,31 @@
   display: block;
 }
 
+.txn-posted {
+  font-size: 0.7rem;
+  opacity: 0.65;
+  min-height: 1rem;
+}
+
+/*
+ * Every meta line keeps its box whether or not it has content, and never
+ * wraps. Tagging rewrites the reason text, and without this the row height
+ * changes underneath the cursor and the rest of the list slides up between
+ * clicks — which makes triaging a queue of them genuinely unpleasant.
+ */
+.txn-line {
+  min-height: 1.15rem;
+  line-height: 1.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-line.font-monospace {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
 /* Bootstrap's spinner is display:inline-block; htmx hides indicators by
    default and reveals them mid-request. */
 .htmx-indicator {

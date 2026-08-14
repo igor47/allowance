@@ -112,3 +112,28 @@ describe("tagging", () => {
     expect((await app.post("/transactions/1/tag?tag=spending")).status).toBe(404)
   })
 })
+
+describe("sync", () => {
+  test("shows how stale the data is and offers a refresh", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const sync = page.querySelector("#sync")?.textContent ?? ""
+    expect(sync).toContain("Transactions synced")
+    expect(page.querySelector("#sync button")?.getAttribute("hx-post")).toBe("/refresh")
+  })
+
+  test("refreshing queues a pull and says so", async () => {
+    const { client, post } = useTestApp()
+    const page = await dom(await post("/refresh"))
+    expect(client.fetches).toBe(1)
+    expect(page.querySelector("#sync")?.textContent).toContain("Refresh queued")
+    // The queued state re-checks itself rather than claiming to be done.
+    expect(page.querySelector("#sync")?.getAttribute("hx-get")).toBe("/sync")
+  })
+
+  test("a second refresh inside the cooldown does not hit the API again", async () => {
+    const { client, post } = useTestApp()
+    await post("/refresh")
+    await post("/refresh")
+    expect(client.fetches).toBe(1)
+  })
+})

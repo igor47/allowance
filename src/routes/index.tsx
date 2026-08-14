@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import type { AppEnv } from "../app"
 import { Layout } from "../components/Layout"
-import { Allowance, Boxes } from "../components/Summary"
+import { Allowance, Boxes, Sync } from "../components/Summary"
 import { TransactionList, TransactionRow } from "../components/Transactions"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
@@ -18,6 +18,11 @@ dashboardRoutes.get("/", async (c) => {
   const dashboard = await c.var.service.build(c.var.today())
   const filter = filterOf(c)
 
+  // Queue a pull if Lunch Money has not asked Plaid lately. Deliberately not
+  // awaited: the fetch is a background job on their side, so blocking the
+  // render would cost a round trip and still show the same numbers.
+  void c.var.service.maybeRefresh(dashboard.freshness)
+
   return c.html(
     <Layout title="allowance" user={c.var.user}>
       {dashboard.unknownAccounts.length > 0 ? (
@@ -26,6 +31,7 @@ dashboardRoutes.get("/", async (c) => {
           <code class="ms-1">ACCOUNT_POLICY</code>.
         </div>
       ) : null}
+      <Sync dashboard={dashboard} />
       <Allowance dashboard={dashboard} />
       <Boxes dashboard={dashboard} />
       <TransactionList
@@ -35,6 +41,23 @@ dashboardRoutes.get("/", async (c) => {
       />
     </Layout>
   )
+})
+
+/** Just the sync line — used by the queued state to re-check itself. */
+dashboardRoutes.get("/sync", async (c) => {
+  return c.html(<Sync dashboard={await c.var.service.build(c.var.today())} />)
+})
+
+/**
+ * Manual refresh. Forces past the staleness check, but not past the cooldown —
+ * Lunch Money asks that this endpoint be used sparingly, and a button invites
+ * exactly the impatient clicking it warns about.
+ */
+dashboardRoutes.post("/refresh", async (c) => {
+  const before = await c.var.service.build(c.var.today())
+  const queued = await c.var.service.maybeRefresh(before.freshness, true)
+  const after = await c.var.service.build(c.var.today())
+  return c.html(<Sync dashboard={after} queued={queued} />)
 })
 
 /** HTMX partial: swap the transaction list when a filter is clicked. */

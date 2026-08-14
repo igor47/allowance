@@ -1,3 +1,4 @@
+import { ago } from "../domain/freshness"
 import type { Dashboard } from "../services/dashboard"
 import { longDate, money, shortDate } from "./format"
 
@@ -157,6 +158,57 @@ export const Boxes = ({ dashboard }: { dashboard: Dashboard }) => {
           </p>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * How current the numbers are, and a way to do something about it.
+ *
+ * Lunch Money imports transactions from Plaid roughly once a day and reads
+ * balances more often, so "nothing from today" is the normal state rather than
+ * a fault. Chase adds its own lag on top: most charges post one or two days
+ * after the card is used, so even a successful refresh will not conjure a
+ * coffee bought an hour ago.
+ *
+ * Refreshing queues a background job on Lunch Money's side — there is nothing
+ * to show synchronously, which is why the queued state says so plainly and
+ * then re-checks itself rather than pretending to have finished.
+ */
+export const Sync = ({ dashboard, queued = false }: { dashboard: Dashboard; queued?: boolean }) => {
+  const { freshness } = dashboard
+
+  return (
+    <div
+      id="sync"
+      class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 small text-secondary"
+      hx-swap-oob="true"
+      {...(queued
+        ? { "hx-get": "/sync", "hx-trigger": "load delay:20s", "hx-swap": "outerHTML" }
+        : {})}
+    >
+      <span>
+        Transactions synced <strong>{ago(freshness.transactionsAt)}</strong> · balances{" "}
+        <strong>{ago(freshness.balancesAt)}</strong>
+        {queued ? (
+          <span class="ms-2 text-info">
+            Refresh queued — Chase usually takes a minute or two, and only posted charges arrive.
+          </span>
+        ) : freshness.shouldRefresh ? (
+          <span class="ms-2 badge text-bg-dark border border-secondary">stale</span>
+        ) : null}
+      </span>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        hx-post="/refresh"
+        hx-target="#sync"
+        hx-swap="outerHTML"
+        hx-disabled-elt="this"
+      >
+        <span class="spinner-border spinner-border-sm me-1 htmx-indicator" aria-hidden="true" />
+        Refresh from bank
+      </button>
     </div>
   )
 }

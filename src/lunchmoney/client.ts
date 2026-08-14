@@ -88,6 +88,14 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
     return await this.request<LmTag[]>("tags")
   }
 
+  /**
+   * Lunch Money queues a background job; nothing is available synchronously.
+   * Their docs ask for this to be used sparingly, so the route rate-limits it.
+   */
+  async triggerFetch(): Promise<void> {
+    await this.request("plaid_accounts/fetch", { method: "POST", body: "{}" })
+  }
+
   async setTags(transactionId: number, tags: string[]): Promise<void> {
     await this.request(`transactions/${transactionId}`, {
       method: "PUT",

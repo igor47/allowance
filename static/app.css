@@ -55,3 +55,21 @@
   height: 90px;
   display: block;
 }
+
+/* Bootstrap's spinner is display:inline-block; htmx hides indicators by
+   default and reveals them mid-request. */
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+/* Any in-flight control dims, so a click feels acknowledged before the
+   round trip finishes. */
+.htmx-request.tag-btn,
+.htmx-request .tag-btn {
+  opacity: 0.45;
+}

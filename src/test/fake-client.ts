@@ -25,6 +25,12 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
     return [...names].map((name, i) => ({ id: i + 1, name, description: null, archived: false }))
   }
 
+  fetches = 0
+
+  async triggerFetch(): Promise<void> {
+    this.fetches += 1
+  }
+
   async setTags(transactionId: number, tags: string[]): Promise<void> {
     const target = this.store.find((t) => t.id === transactionId)
     if (!target) throw new Error(`no such transaction: ${transactionId}`)

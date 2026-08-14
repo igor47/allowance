@@ -10,6 +10,7 @@ import {
 import { type CycleTotal, cycleTotal, reconciliation, STATEMENT_ACCOUNT } from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
 import { addDays, type IsoDate } from "../domain/dates"
+import { type Freshness, freshness } from "../domain/freshness"
 import { unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
 import type { LmPlaidAccount, LunchMoneyClient } from "../lunchmoney/types"
@@ -38,12 +39,15 @@ export interface Dashboard {
   transactions: ClassifiedTransaction[]
   needsReview: number
   unknownAccounts: string[]
+  freshness: Freshness
 }
 
 /** Chase posts a charge up to four days after it is authorized. */
 const POSTING_SLACK_DAYS = 5
 
 export class DashboardService {
+  private lastTriggerAt = 0
+
   constructor(
     private readonly client: LunchMoneyClient,
     private readonly config: Config,
@@ -116,6 +120,32 @@ export class DashboardService {
         (c) => !c.classification.reviewed && c.classification.bucket !== "excluded"
       ).length,
       unknownAccounts: unknownAccounts(transactions),
+      freshness: freshness(accounts, this.config.refreshAfterMinutes),
+    }
+  }
+
+  /**
+   * Ask Lunch Money to pull from Plaid, if it has not lately.
+   *
+   * Their API allows one fetch a minute but asks for restraint, so this is
+   * gated twice: on the accounts' own last_fetch, and on an in-process
+   * cooldown so two people loading the page at once queue one job, not two.
+   * The pull is a background job on their side - nothing is fresher when this
+   * returns, it is the *next* load that benefits.
+   */
+  async maybeRefresh(current: Freshness, force = false): Promise<boolean> {
+    if (!force && !current.shouldRefresh) return false
+    const now = Date.now()
+    if (now - this.lastTriggerAt < this.config.refreshAfterMinutes * 60_000) return false
+    this.lastTriggerAt = now
+    try {
+      await this.client.triggerFetch()
+      this.cache.clear()
+      return true
+    } catch (error) {
+      // A failed refresh must never take the dashboard down with it.
+      console.error("plaid fetch trigger failed", error)
+      return false
     }
   }
 }

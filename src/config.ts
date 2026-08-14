@@ -16,6 +16,8 @@ export interface Config {
   /** Seconds to hold API responses in memory. Their rate limit is aggressive. */
   cacheTtlSeconds: number
   allowance: AllowanceConfig
+  /** Ask Lunch Money to pull from Plaid if it has not for this long. */
+  refreshAfterMinutes: number
   /** Day of month the Card statement closes. */
   statementCloseDay: number
   /** Day of the following month the autopay debits. */
@@ -40,6 +42,7 @@ export const config: Config = {
     dailyTarget: int("DAILY_TARGET", 200),
     rolloverCapDays: int("ROLLOVER_CAP_DAYS", 14),
   },
+  refreshAfterMinutes: int("REFRESH_AFTER_MINUTES", 30),
   statementCloseDay: int("STATEMENT_CLOSE_DAY", 12),
   statementDueDay: int("STATEMENT_DUE_DAY", 9),
 }

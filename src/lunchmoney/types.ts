@@ -58,6 +58,8 @@ export interface LunchMoneyClient {
   plaidAccounts(): Promise<LmPlaidAccount[]>
   tags(): Promise<LmTag[]>
   setTags(transactionId: number, tags: string[]): Promise<void>
+  /** Queue a background pull from Plaid. Asynchronous; results arrive later. */
+  triggerFetch(): Promise<void>
 }
 
 /** Account display name, resolved consistently across plaid and manual assets. */

@@ -189,15 +189,16 @@ export const TransactionList = ({
       </div>
     </div>
 
+    {/*
+     * Both figures always show. Hiding "against the allowance" when it equalled
+     * the total made two filters look like they were measuring different
+     * things — Igor read "$925 · $675 against the allowance" while Serena read
+     * "$879" and you had to work out whether the rest was excluded or absent.
+     */}
     <p class="small text-secondary mb-2">
       <span class="tabular">{summary.count}</span> transaction{summary.count === 1 ? "" : "s"} ·{" "}
-      <span class="tabular">{money(summary.total)}</span>
-      {Math.abs(summary.counting - summary.total) > 0.5 ? (
-        <>
-          {" "}
-          · <span class="tabular">{money(summary.counting)}</span> against the allowance
-        </>
-      ) : null}
+      <span class="tabular">{money(summary.total)}</span> total ·{" "}
+      <span class="tabular">{money(summary.counting)}</span> against the allowance
     </p>
 
     {entries.length === 0 ? (

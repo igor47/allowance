@@ -19,7 +19,7 @@ import { postedDate } from "../lunchmoney/details"
 import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { IsoDate } from "./dates"
-import { looksLikeSettlement } from "./policy"
+import { isCardPayment } from "./policy"
 
 /** The card whose statement cycle drives the summary boxes. */
 export const STATEMENT_ACCOUNT = "Card"
@@ -33,10 +33,14 @@ export interface CycleTotal {
 
 const EMPTY: CycleTotal = { charges: 0, credits: 0, net: 0, count: 0 }
 
+/**
+ * The statement bills everything actually charged. Lunch Money's exclude flag
+ * and category are not consulted — a $196 hotel deposit is on the bill whether
+ * or not it got filed as a transfer — so only payments are taken out.
+ */
 export function isCardCharge(txn: LmTransaction, account: string = STATEMENT_ACCOUNT): boolean {
   if (accountNameOf(txn) !== account) return false
-  if (txn.exclude_from_totals) return false
-  return !looksLikeSettlement(txn)
+  return !isCardPayment(txn)
 }
 
 export function cycleTotal(

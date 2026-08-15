@@ -124,6 +124,11 @@ export function isInternalTransfer(txn: LmTransaction): boolean {
   return INTERNAL_TRANSFER.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
 }
 
+/** A payment against the card balance, as opposed to anything bought with it. */
+export function isCardPayment(txn: LmTransaction): boolean {
+  return CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
+}
+
 export function looksLikeSettlement(txn: LmTransaction): boolean {
   const name = `${txn.payee ?? ""} ${txn.original_name ?? ""}`
   if (CARD_PAYMENT.test(name)) return true
@@ -202,18 +207,22 @@ export function classify(txn: LmTransaction): Classification {
     }
   }
 
-  // The discretionary card. Lunch Money's exclude flag is trustworthy here —
-  // it is how a superseded pending duplicate is marked.
-  if (txn.exclude_from_totals) return EXCLUDED("excluded from totals in Lunch Money", amount)
+  // The discretionary card.
+  //
+  // `exclude_from_totals` is NOT consulted, and neither is the category. Both
+  // follow from Lunch Money's categorisation, which is unreliable here: of the
+  // four excluded charges in three months, three were real — a $196 hotel
+  // deposit, a $6.87 coffee, and a $1,690 refund — all filed as "Payment,
+  // Transfer" and silently dropped. Only the payee reliably marks a payment.
   if (amount < 0) {
-    if (looksLikeSettlement(txn)) return EXCLUDED("card payment or transfer", amount)
+    if (isCardPayment(txn)) return EXCLUDED("payment against the card balance", amount)
     return {
       bucket: "spending",
       counts: true,
       reviewed: false,
       taggable: true,
       amount,
-      reason: "refund",
+      reason: txn.exclude_from_totals ? "refund — Lunch Money excludes it, counted here" : "refund",
     }
   }
   return {
@@ -222,7 +231,9 @@ export function classify(txn: LmTransaction): Classification {
     reviewed: false,
     taggable: true,
     amount,
-    reason: "untagged on the discretionary card",
+    reason: txn.exclude_from_totals
+      ? `counted despite Lunch Money excluding it (${txn.category_name ?? "no category"})`
+      : "untagged on the discretionary card",
   }
 }
 

@@ -27,6 +27,25 @@ describe("cycle totals", () => {
     expect(total.net).toBe(675)
   })
 
+  test("a charge Lunch Money excluded is still on the bill", () => {
+    // The bank billed the $196 hotel deposit whether or not Lunch Money filed
+    // it as a transfer, so the statement total has to include it.
+    const total = cycleTotal(
+      [
+        txn({
+          date: "2026-08-03",
+          amount: "196.15",
+          payee: "COSMOPOL-ADV DEP",
+          category_name: "🔄 Payment, Transfer",
+          exclude_from_totals: true,
+        }),
+      ],
+      "2026-07-13",
+      "2026-08-12"
+    )
+    expect(total.charges).toBeCloseTo(196.15, 2)
+  })
+
   test("the autopay is not part of the next bill", () => {
     const total = cycleTotal(
       [

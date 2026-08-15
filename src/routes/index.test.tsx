@@ -13,8 +13,10 @@ describe("dashboard", () => {
 
     const page = await dom(response)
     const hero = page.querySelector(".hero-number")?.textContent?.trim()
-    // $200/day over 14 days against $3,157 of real August spend.
-    expect(hero).toBe("-$356")
+    // $200/day over 14 days against $3,360 of real August spend — which
+    // includes the $196.15 hotel deposit and $6.87 coffee that Lunch Money had
+    // filed as transfers and excluded.
+    expect(hero).toBe("-$560")
   })
 
   test("shows cash, the closed statement, and what is accruing", async () => {
@@ -33,12 +35,14 @@ describe("dashboard", () => {
   })
 
   test("the statement total includes charges that posted after the cycle opened", async () => {
-    // The fetch window has to reach back past the cycle start, since the API
-    // filters on the authorized date and the cycle is bucketed on the posted
-    // date. Without the slack this number comes out several hundred short.
+    // Two things this pins. The fetch window has to reach back past the cycle
+    // start, since the API filters on the authorized date while the cycle is
+    // bucketed on the posted date. And the bill includes charges Lunch Money
+    // excluded from totals — a $196 hotel deposit and a $6.87 coffee, both
+    // filed as "Payment, Transfer" — because the bank billed them regardless.
     const page = await dom(await useTestApp().get("/"))
     const due = page.querySelectorAll("#boxes .stat-number")[1]?.textContent
-    expect(due).toBe("$14,927")
+    expect(due).toBe("$15,130")
   })
 
   test("filters narrow the feed", async () => {

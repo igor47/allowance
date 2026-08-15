@@ -45,8 +45,14 @@ dashboardRoutes.get("/", async (c) => {
   )
 })
 
-/** Just the sync line — used by the queued state to re-check itself. */
+/**
+ * Just the sync line — used by the queued state to re-check itself twenty
+ * seconds after a refresh was queued. This is the one place that reads past the
+ * cache, because "did anything arrive?" is the entire question it exists to
+ * answer.
+ */
 dashboardRoutes.get("/sync", async (c) => {
+  c.var.service.invalidate()
   return c.html(<Sync dashboard={await c.var.service.build(c.var.today())} />)
 })
 

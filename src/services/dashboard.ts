@@ -54,6 +54,11 @@ export class DashboardService {
     private readonly cache: Cache
   ) {}
 
+  /** Force the next build to re-read from the API. */
+  invalidate(): void {
+    this.cache.clear()
+  }
+
   /**
    * Write through to Lunch Money, then patch the cached copy in place.
    *
@@ -164,7 +169,12 @@ export class DashboardService {
     this.lastTriggerAt = now
     try {
       await this.client.triggerFetch()
-      this.cache.clear()
+      // Deliberately no cache invalidation. The pull is a background job on
+      // Lunch Money's side, so nothing is fresher yet — dropping the cache here
+      // would only force the next page load to re-read identical data, and
+      // because the trigger is fired without awaiting it, it also raced the
+      // render. `/sync` is where a re-read belongs: it runs after the job has
+      // had time to land and is explicitly asking whether anything arrived.
       return true
     } catch (error) {
       // A failed refresh must never take the dashboard down with it.

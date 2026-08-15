@@ -136,8 +136,12 @@ describe("negative amounts", () => {
     expect(result.amount).toBe(-195)
   })
 
-  test("transfers excluded from totals never count", () => {
-    expect(classify(txn({ amount: "-100.00", exclude_from_totals: true })).counts).toBe(false)
+  test("on the card, a credit is a refund unless the payee says otherwise", () => {
+    // Lunch Money's exclude flag does not decide this. Only the payee does.
+    expect(classify(txn({ amount: "-100.00", exclude_from_totals: true })).counts).toBe(true)
+    expect(classify(txn({ amount: "-100.00", payee: "AUTOMATIC PAYMENT - THANK" })).counts).toBe(
+      false
+    )
   })
 })
 
@@ -231,5 +235,29 @@ describe("against recorded data", () => {
       (t) => classify(t).counts && t.account_display_name !== "Card"
     )
     expect(leaked).toEqual([])
+  })
+})
+
+describe("Lunch Money's exclude flag on the card", () => {
+  // Four Chase charges carried exclude_from_totals across three months, all of
+  // them because they were filed under "Payment, Transfer". Three were real.
+  const excluded = (over = {}) =>
+    txn({ exclude_from_totals: true, category_name: "🔄 Payment, Transfer", ...over })
+
+  test("a real charge filed as a transfer still counts", () => {
+    const hotel = excluded({ payee: "COSMOPOL-ADV DEP", amount: "196.15" })
+    expect(classify(hotel).counts).toBe(true)
+    expect(classify(hotel).reason).toContain("despite Lunch Money excluding it")
+  })
+
+  test("a refund filed as a transfer still credits back", () => {
+    const refund = excluded({ payee: "A DOG DAYCARE", amount: "-700.00" })
+    expect(classify(refund).counts).toBe(true)
+    expect(classify(refund).amount).toBe(-1690)
+  })
+
+  test("the actual card payment is still excluded", () => {
+    const payment = excluded({ payee: "AUTOMATIC PAYMENT - THANK", amount: "-4200.00" })
+    expect(classify(payment).counts).toBe(false)
   })
 })

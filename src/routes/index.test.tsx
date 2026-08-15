@@ -117,7 +117,7 @@ describe("sync", () => {
   test("shows how stale the data is and offers a refresh", async () => {
     const page = await dom(await useTestApp().get("/"))
     const sync = page.querySelector("#sync")?.textContent ?? ""
-    expect(sync).toContain("Transactions synced")
+    expect(sync).toContain("newest transaction")
     expect(page.querySelector("#sync button")?.getAttribute("hx-post")).toBe("/refresh")
   })
 
@@ -125,7 +125,7 @@ describe("sync", () => {
     const { client, post } = useTestApp()
     const page = await dom(await post("/refresh"))
     expect(client.fetches).toBe(1)
-    expect(page.querySelector("#sync")?.textContent).toContain("Refresh queued")
+    expect(page.querySelector("#sync")?.textContent).toContain("Queued.")
     // The queued state re-checks itself rather than claiming to be done.
     expect(page.querySelector("#sync")?.getAttribute("hx-get")).toBe("/sync")
   })
@@ -160,6 +160,38 @@ describe("caching", () => {
     const page = await dom(await app.get("/?filter=spending"))
     expect(page.querySelector(`#txn-${target.id}`)?.textContent).toContain("tagged spending")
     expect(client.reads).toBe(readsBefore)
+  })
+})
+
+describe("credits", () => {
+  test("the credits filter surfaces refunds and deposits to tag", async () => {
+    const page = await dom(await useTestApp().get("/?filter=credits"))
+    const rows = page.querySelectorAll("tbody tr")
+    expect(rows.length).toBeGreaterThan(0)
+    // Every row is money coming back, and every one can be tagged.
+    for (const row of Array.from(rows)) {
+      expect(row.querySelectorAll("button").length).toBeGreaterThan(0)
+    }
+  })
+
+  test("deposits stay out of the review queue", async () => {
+    const app = useTestApp()
+    const review = await dom(await app.get("/?filter=review"))
+    const badges = Array.from(review.querySelectorAll("tbody .badge"), (b) => b.textContent)
+    expect(badges).not.toContain("deposit")
+  })
+
+  test("tagging a reimbursement moves the allowance up", async () => {
+    const client = new FakeLunchMoneyClient()
+    const all = await client.transactions("2026-08-01", "2026-08-14")
+    const check = all.find((t) => t.payee?.startsWith("CHECK RECEIVED"))
+    if (!check) throw new Error("fixture has no deposit to reimburse against")
+
+    const app = useTestApp(client, 300)
+    const before = (await dom(await app.get("/"))).querySelector(".hero-number")?.textContent
+    const page = await dom(await app.post(`/transactions/${check.id}/tag?tag=spending`))
+    const after = page.querySelector("#allowance .hero-number")?.textContent
+    expect(after).not.toBe(before)
   })
 })
 

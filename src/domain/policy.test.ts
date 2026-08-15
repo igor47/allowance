@@ -121,8 +121,57 @@ describe("negative amounts", () => {
     expect(classify(rent).bucket).toBe("assumed-fixed")
   })
 
+  test("a merchant refund filed as Income still credits the allowance", () => {
+    // Lunch Money filed a real $195 credit from A Theatre under "Income".
+    // Treating an Income category as a settlement swallowed money that should
+    // have come back, so the payee is what decides.
+    const refund = txn({
+      amount: "-195.00",
+      payee: "A Theatreertory The",
+      category_name: "💵 Income",
+      is_income: true,
+    })
+    const result = classify(refund)
+    expect(result.counts).toBe(true)
+    expect(result.amount).toBe(-195)
+  })
+
   test("transfers excluded from totals never count", () => {
     expect(classify(txn({ amount: "-100.00", exclude_from_totals: true })).counts).toBe(false)
+  })
+})
+
+describe("reimbursements", () => {
+  const deposit = (over = {}) =>
+    txn({
+      account_display_name: "Checking",
+      amount: "-154.00",
+      payee: "CHECK RECEIVED (Cash)",
+      category_name: "💵 Income",
+      is_income: true,
+      ...over,
+    })
+
+  test("a deposit does not count, but can be tagged", () => {
+    const result = classify(deposit())
+    expect(result.bucket).toBe("deposit")
+    expect(result.counts).toBe(false)
+    expect(result.taggable).toBe(true)
+  })
+
+  test("tagging a reimbursement spending gives the allowance back", () => {
+    // Spend on the card for work, get repaid into the bank: the purchase counts
+    // and the repayment counts negatively, so the pair nets to zero.
+    const result = classify(deposit({ tags: ["spending"] }))
+    expect(result.counts).toBe(true)
+    expect(result.amount).toBe(-154)
+  })
+
+  test("payroll and transfers are not reimbursements by default", () => {
+    expect(classify(deposit({ payee: "DIRECT DEPOSIT SERVICECO MEPAYROLL" })).counts).toBe(false)
+    expect(classify(deposit({ payee: "REDEMPTION FROM CORE ACCOUNT FDIC" })).bucket).toBe(
+      "excluded"
+    )
   })
 })
 

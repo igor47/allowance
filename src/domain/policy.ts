@@ -65,6 +65,12 @@ export type Bucket =
   | "irregular"
   /** Assumed fixed because it is on a default-out account and untagged. */
   | "assumed-fixed"
+  /**
+   * Money arriving in a bank account: payroll, interest, a cheque, an expense
+   * reimbursement. Not spending, but taggable — tagging a reimbursement
+   * `spending` credits the allowance back for the purchase it repays.
+   */
+  | "deposit"
   /** Transfers, payments, income, dormant accounts. Never a spend. */
   | "excluded"
 
@@ -74,6 +80,8 @@ export interface Classification {
   counts: boolean
   /** Has a human classified it, or is this the account default? */
   reviewed: boolean
+  /** Can a tag change the answer? False for transfers and dormant accounts. */
+  taggable: boolean
   /** Signed dollars applied to spend. Negative for refunds. */
   amount: number
   /** Why, in a few words — rendered in the UI so the math is never a mystery. */
@@ -84,6 +92,7 @@ const EXCLUDED = (reason: string, amount: number): Classification => ({
   bucket: "excluded",
   counts: false,
   reviewed: false,
+  taggable: false,
   amount,
   reason,
 })
@@ -94,13 +103,18 @@ const EXCLUDED = (reason: string, amount: number): Classification => ({
  * so they are matched explicitly rather than trusted to `exclude_from_totals` —
  * which Lunch Money sets inconsistently (the 2026-07-09 Chase autopay came
  * through as category "Income" with the flag unset).
+ *
+ * Deliberately NOT keyed on `is_income` or an "Income" category. Lunch Money
+ * files genuine merchant refunds that way too — a $195 credit from A Theatre
+ * arrived as category "Income" — and treating those as settlements silently
+ * swallowed money that should have come back to the allowance. The payee is the
+ * reliable signal; a refund is never called "AUTOMATIC PAYMENT".
  */
-const SETTLEMENT_CATEGORY = /payment|transfer|income/i
+const SETTLEMENT_CATEGORY = /payment|transfer/i
 const SETTLEMENT_PAYEE =
   /automatic payment|credit card payment|crcardpmt|cautopay|redemption from core/i
 
 export function looksLikeSettlement(txn: LmTransaction): boolean {
-  if (txn.is_income) return true
   if (txn.category_name && SETTLEMENT_CATEGORY.test(txn.category_name)) return true
   const name = `${txn.payee ?? ""} ${txn.original_name ?? ""}`
   return SETTLEMENT_PAYEE.test(name)
@@ -126,6 +140,7 @@ export function classify(txn: LmTransaction): Classification {
       bucket: "recurring",
       counts: false,
       reviewed: true,
+      taggable: true,
       amount,
       reason: "tagged recurring",
     }
@@ -134,17 +149,40 @@ export function classify(txn: LmTransaction): Classification {
       bucket: "irregular",
       counts: false,
       reviewed: true,
+      taggable: true,
       amount,
       reason: "tagged irregular",
     }
   if (tags.includes(TAG.spending))
-    return { bucket: "spending", counts: true, reviewed: true, amount, reason: "tagged spending" }
+    return {
+      bucket: "spending",
+      counts: true,
+      reviewed: true,
+      taggable: true,
+      amount,
+      reason: "tagged spending",
+    }
 
   if (amount < 0) {
-    // A refund credits the allowance back; a payment or deposit must not.
-    if (policy === "default-out") return EXCLUDED("deposit into a fixed-cost account", amount)
     if (looksLikeSettlement(txn)) return EXCLUDED("card payment or transfer", amount)
-    return { bucket: "spending", counts: true, reviewed: false, amount, reason: "refund" }
+    if (policy === "default-out")
+      return {
+        bucket: "deposit",
+        counts: false,
+        reviewed: false,
+        taggable: true,
+        amount,
+        reason: "deposit — tag it `spending` if it reimburses one",
+      }
+    // A merchant refund on the card gives the money straight back.
+    return {
+      bucket: "spending",
+      counts: true,
+      reviewed: false,
+      taggable: true,
+      amount,
+      reason: "refund",
+    }
   }
 
   if (amount === 0) return EXCLUDED("zero amount", amount)
@@ -160,6 +198,7 @@ export function classify(txn: LmTransaction): Classification {
       bucket: "spending",
       counts: true,
       reviewed: false,
+      taggable: true,
       amount,
       reason: "untagged on the discretionary card",
     }
@@ -168,6 +207,7 @@ export function classify(txn: LmTransaction): Classification {
     bucket: "assumed-fixed",
     counts: false,
     reviewed: false,
+    taggable: true,
     amount,
     reason: `untagged on ${account} — tag it \`spending\` to count it`,
   }

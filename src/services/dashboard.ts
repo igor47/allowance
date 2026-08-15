@@ -128,11 +128,23 @@ export class DashboardService {
             : reconciliation(reported, lastClosedTotal.net + currentTotal.net),
       },
       transactions: inPeriod,
+      // Deposits are taggable but not review items — payroll arriving twice a
+      // month is not a question anyone needs asked. They live under "credits".
       needsReview: inPeriod.filter(
-        (c) => !c.classification.reviewed && c.classification.bucket !== "excluded"
+        (c) =>
+          !c.classification.reviewed &&
+          c.classification.taggable &&
+          c.classification.bucket !== "deposit"
       ).length,
       unknownAccounts: unknownAccounts(transactions),
-      freshness: freshness(accounts, this.config.refreshAfterMinutes),
+      freshness: freshness(
+        accounts,
+        this.config.refreshAfterMinutes,
+        transactions.reduce<string | null>(
+          (max, t) => (max === null || t.date > max ? t.date : max),
+          null
+        )
+      ),
     }
   }
 
@@ -179,11 +191,23 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
 }
 
 /** Filters offered in the transaction feed, in the order they are shown. */
-export const FILTERS = ["review", "spending", "all", "fixed", "igor", "serena"] as const
+export const FILTERS = ["review", "spending", "credits", "all", "fixed", "igor", "serena"] as const
 export type Filter = (typeof FILTERS)[number]
 
 export function isFilter(value: string | undefined): value is Filter {
   return !!value && (FILTERS as readonly string[]).includes(value)
+}
+
+/**
+ * Worth a human's attention.
+ *
+ * Deposits are taggable but not review items — payroll arriving twice a month
+ * is not a question anyone needs asked. They live under "credits", where a work
+ * reimbursement can be found when one turns up.
+ */
+export function needsReview(entry: ClassifiedTransaction): boolean {
+  const { reviewed, taggable, bucket } = entry.classification
+  return !reviewed && taggable && bucket !== "deposit"
 }
 
 export interface FilterSummary {
@@ -212,11 +236,13 @@ export function applyFilter(
 ): ClassifiedTransaction[] {
   switch (filter) {
     case "review":
-      return transactions.filter(
-        (c) => !c.classification.reviewed && c.classification.bucket !== "excluded"
-      )
+      return transactions.filter(needsReview)
     case "spending":
       return transactions.filter((c) => c.classification.counts)
+    // Money coming back: merchant refunds and bank deposits. This is where a
+    // work expense reimbursement is found and tagged.
+    case "credits":
+      return transactions.filter((c) => c.classification.taggable && c.classification.amount < 0)
     case "fixed":
       return transactions.filter((c) =>
         ["recurring", "irregular", "assumed-fixed"].includes(c.classification.bucket)

@@ -11,12 +11,14 @@ const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
   recurring: { label: "recurring", class: "text-bg-secondary" },
   irregular: { label: "irregular", class: "text-bg-info" },
   "assumed-fixed": { label: "assumed fixed", class: "text-bg-dark border border-secondary" },
+  deposit: { label: "deposit", class: "text-bg-success" },
   excluded: { label: "excluded", class: "text-bg-dark border border-secondary" },
 }
 
 const FILTER_LABEL: Record<Filter, string> = {
   review: "Needs review",
   spending: "Spending",
+  credits: "Credits",
   all: "All",
   fixed: "Fixed",
   igor: "Igor",
@@ -54,10 +56,11 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
   const account = accountNameOf(txn)
   const details = detailsOf(txn)
   const style = BUCKET_STYLE[classification.bucket]
-  const taggable = classification.bucket !== "excluded"
+  const taggable = classification.taggable
+  const credit = classification.amount < 0
   const classes = [
-    !classification.reviewed && taggable ? "unreviewed" : "",
-    classification.counts ? "" : "not-counted",
+    !classification.reviewed && taggable && classification.bucket !== "deposit" ? "unreviewed" : "",
+    classification.counts || credit ? "" : "not-counted",
   ]
     .filter(Boolean)
     .join(" ")
@@ -99,7 +102,9 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
           <span class="text-secondary fst-italic">{classification.reason}</span>
         </div>
       </td>
-      <td class="text-end tabular text-nowrap align-top">{cents(classification.amount)}</td>
+      <td class={`text-end tabular text-nowrap align-top${credit ? " text-success" : ""}`}>
+        {cents(classification.amount)}
+      </td>
       <td class="align-top">
         <span class={`badge ${style.class}`}>{style.label}</span>
       </td>

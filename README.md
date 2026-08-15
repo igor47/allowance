@@ -79,6 +79,10 @@ outpost. Stateless, so there is no volume and nothing to back up.
 mise run publish     # builds, pushes ghcr.io/igor47/allowance
 ```
 
+Registry auth comes from `gh auth token` at push time, so there is no PAT to
+manage and nothing stored in `~/.docker/config.json`. See
+[`docs/deploy.md`](docs/deploy.md).
+
 Then pin the new tag in `compose.stacks/hosts/igor/compose.yml` and `just reload`
 on purr.
 

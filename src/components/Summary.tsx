@@ -181,11 +181,14 @@ export const Sync = ({ dashboard, queued = false }: { dashboard: Dashboard; queu
         : {})}
     >
       <span>
-        Transactions synced <strong>{ago(freshness.transactionsAt)}</strong> · balances{" "}
-        <strong>{ago(freshness.balancesAt)}</strong>
+        Checked <strong>{ago(freshness.lastFetchAt)}</strong> · newest transaction{" "}
+        <strong>
+          {freshness.newestTransaction ? shortDate(freshness.newestTransaction) : "none"}
+        </strong>{" "}
+        · last new one arrived <strong>{ago(freshness.transactionsAt)}</strong>
         {queued ? (
           <span class="ms-2 text-info">
-            Refresh queued — Chase usually takes a minute or two, and only posted charges arrive.
+            Queued. Nothing new appears until Chase posts it, which takes a day or two.
           </span>
         ) : freshness.shouldRefresh ? (
           <span class="ms-2 badge text-bg-dark border border-secondary">stale</span>

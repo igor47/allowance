@@ -25,6 +25,24 @@ const account = (over: Partial<LmPlaidAccount>): LmPlaidAccount =>
   }) as LmPlaidAccount
 
 describe("freshness", () => {
+  test("reports the newest transaction it holds", () => {
+    const result = freshness([account({})], 30, "2026-08-13", NOW)
+    expect(result.newestTransaction).toBe("2026-08-13")
+  })
+
+  test("an import timestamp only moves when something new arrived", () => {
+    // A refresh that finds nothing leaves last_import alone while last_fetch
+    // advances — which is why the two read differently after pressing refresh.
+    const result = freshness(
+      [account({ last_fetch: "2026-08-14T23:30:00Z", last_import: "2026-08-14T04:52:15.051Z" })],
+      30,
+      null,
+      NOW
+    )
+    expect(result.minutesSinceFetch).toBe(2)
+    expect(result.transactionsAt?.toISOString()).toBe("2026-08-14T04:52:15.051Z")
+  })
+
   test("takes the newest timestamp across accounts", () => {
     const result = freshness(
       [
@@ -32,25 +50,26 @@ describe("freshness", () => {
         account({ last_import: "2026-08-14T04:52:15.051Z" }),
       ],
       30,
+      null,
       NOW
     )
     expect(result.transactionsAt?.toISOString()).toBe("2026-08-14T04:52:15.051Z")
   })
 
   test("a recent fetch is left alone", () => {
-    const result = freshness([account({ last_fetch: "2026-08-14T23:20:00Z" })], 30, NOW)
+    const result = freshness([account({ last_fetch: "2026-08-14T23:20:00Z" })], 30, null, NOW)
     expect(result.minutesSinceFetch).toBe(12)
     expect(result.shouldRefresh).toBe(false)
   })
 
   test("a stale fetch is worth queueing", () => {
-    const result = freshness([account({ last_fetch: "2026-08-14T21:35:25.872Z" })], 30, NOW)
+    const result = freshness([account({ last_fetch: "2026-08-14T21:35:25.872Z" })], 30, null, NOW)
     expect(result.minutesSinceFetch).toBe(116)
     expect(result.shouldRefresh).toBe(true)
   })
 
   test("never fetched counts as stale", () => {
-    const result = freshness([account({ last_fetch: null as unknown as string })], 30, NOW)
+    const result = freshness([account({ last_fetch: null as unknown as string })], 30, null, NOW)
     expect(result.shouldRefresh).toBe(true)
   })
 })

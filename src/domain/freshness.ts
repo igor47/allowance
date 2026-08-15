@@ -10,8 +10,17 @@
 import type { LmPlaidAccount } from "../lunchmoney/types"
 
 export interface Freshness {
-  /** Newest transaction import across accounts. */
+  /**
+   * When new transactions were last *imported*.
+   *
+   * This only moves when Plaid actually had something new to hand over. A
+   * refresh that finds nothing leaves it untouched, which is why it can sit at
+   * "18h ago" while balances update — balances are re-read every time, whereas
+   * an import needs Chase to have posted something.
+   */
   transactionsAt: Date | null
+  /** Date of the newest transaction held, which is what people actually mean. */
+  newestTransaction: string | null
   /** Newest balance read across accounts. */
   balancesAt: Date | null
   /** When Lunch Money last asked Plaid for anything. */
@@ -34,6 +43,7 @@ const newest = (values: (string | null | undefined)[]): Date | null => {
 export function freshness(
   accounts: LmPlaidAccount[],
   refreshAfterMinutes: number,
+  newestTransaction: string | null = null,
   now: Date = new Date()
 ): Freshness {
   const transactionsAt = newest(accounts.map((a) => a.last_import))
@@ -44,6 +54,7 @@ export function freshness(
 
   return {
     transactionsAt,
+    newestTransaction,
     balancesAt,
     lastFetchAt,
     minutesSinceFetch,

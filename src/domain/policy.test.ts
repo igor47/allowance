@@ -167,6 +167,42 @@ describe("reimbursements", () => {
     expect(result.amount).toBe(-154)
   })
 
+  test("a reimbursement flagged as a transfer is still taggable", () => {
+    // The real case: Fidelity sweeps cash on every movement, so this arrives
+    // categorised "Payment, Transfer" AND excluded from totals — the same
+    // signals as its own internal sweep. Trusting either made it untaggable,
+    // which meant a work reimbursement could never be credited back.
+    const reimbursement = txn({
+      account_display_name: "Checking",
+      amount: "-245.86",
+      payee: "DIRECT DEPOSIT Fractional ABDW3EEY5HF (Cash)",
+      category_name: "🔄 Payment, Transfer",
+      exclude_from_totals: true,
+    })
+    expect(classify(reimbursement).bucket).toBe("deposit")
+    expect(classify(reimbursement).taggable).toBe(true)
+
+    // ...and tagging it works, despite Lunch Money excluding it.
+    const tagged = classify({
+      ...reimbursement,
+      tags: [{ id: 1, name: "spending", description: null, archived: false }],
+    })
+    expect(tagged.counts).toBe(true)
+    expect(tagged.amount).toBe(-245.86)
+  })
+
+  test("the sweep that pairs with it is not a deposit", () => {
+    const sweep = txn({
+      account_display_name: "Checking",
+      amount: "245.86",
+      payee: "PURCHASE INTO CORE ACCOUNT FDIC INSURED DEPOSIT",
+      category_name: "🔄 Payment, Transfer",
+      exclude_from_totals: true,
+    })
+    expect(classify(sweep).bucket).toBe("excluded")
+    expect(classify(sweep).reason).toBe("internal account sweep")
+  })
+
   test("payroll and transfers are not reimbursements by default", () => {
     expect(classify(deposit({ payee: "DIRECT DEPOSIT SERVICECO MEPAYROLL" })).counts).toBe(false)
     expect(classify(deposit({ payee: "REDEMPTION FROM CORE ACCOUNT FDIC" })).bucket).toBe(

@@ -98,26 +98,37 @@ const EXCLUDED = (reason: string, amount: number): Classification => ({
 })
 
 /**
- * Card payments and account transfers arrive as large negative amounts. If they
- * were treated as refunds a single autopay would hand back $19k of allowance,
- * so they are matched explicitly rather than trusted to `exclude_from_totals` —
- * which Lunch Money sets inconsistently (the 2026-07-09 Chase autopay came
- * through as category "Income" with the flag unset).
+ * Fidelity keeps cash in a money-market position and sweeps it in and out on
+ * every movement, so each real transaction arrives paired with an internal
+ * sweep. Both halves come through categorised "Payment, Transfer" and flagged
+ * `exclude_from_totals`, which makes those two signals useless for telling a
+ * genuine deposit from bookkeeping — a work reimbursement ("DIRECT DEPOSIT
+ * Fractional ...") is indistinguishable from its own sweep by category alone.
+ *
+ * The payee is what separates them. These patterns are the internal half.
+ */
+const INTERNAL_TRANSFER = /redemption from core|purchase into core|transferred from vs|acctverify/i
+
+/**
+ * Card payments: the bill being settled, on either side of the transaction.
  *
  * Deliberately NOT keyed on `is_income` or an "Income" category. Lunch Money
  * files genuine merchant refunds that way too — a $195 credit from A Theatre
  * arrived as category "Income" — and treating those as settlements silently
- * swallowed money that should have come back to the allowance. The payee is the
- * reliable signal; a refund is never called "AUTOMATIC PAYMENT".
+ * swallowed money that should have come back. A refund is never called
+ * "AUTOMATIC PAYMENT".
  */
-const SETTLEMENT_CATEGORY = /payment|transfer/i
-const SETTLEMENT_PAYEE =
-  /automatic payment|credit card payment|crcardpmt|cautopay|redemption from core/i
+const CARD_PAYMENT = /automatic payment|credit card payment|crcardpmt|cautopay|chase credit/i
+
+export function isInternalTransfer(txn: LmTransaction): boolean {
+  return INTERNAL_TRANSFER.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
+}
 
 export function looksLikeSettlement(txn: LmTransaction): boolean {
-  if (txn.category_name && SETTLEMENT_CATEGORY.test(txn.category_name)) return true
   const name = `${txn.payee ?? ""} ${txn.original_name ?? ""}`
-  return SETTLEMENT_PAYEE.test(name)
+  if (CARD_PAYMENT.test(name)) return true
+  if (INTERNAL_TRANSFER.test(name)) return true
+  return !!txn.category_name && /payment|transfer/i.test(txn.category_name)
 }
 
 export function tagNames(txn: LmTransaction): string[] {
@@ -131,10 +142,10 @@ export function classify(txn: LmTransaction): Classification {
   const tags = tagNames(txn)
 
   if (policy === "ignore") return EXCLUDED(`${account} is not tracked`, amount)
-  if (txn.exclude_from_totals) return EXCLUDED("excluded from totals in Lunch Money", amount)
 
-  // An explicit tag always wins, including over the settlement heuristics —
-  // it is the manual override that keeps the rules from being a cage.
+  // An explicit tag beats every heuristic, including Lunch Money's own exclude
+  // flag. Without this a reimbursement could never be counted, because the
+  // deposit that repays it arrives flagged as a transfer.
   if (tags.includes(TAG.recurring))
     return {
       bucket: "recurring",
@@ -163,9 +174,16 @@ export function classify(txn: LmTransaction): Classification {
       reason: "tagged spending",
     }
 
-  if (amount < 0) {
-    if (looksLikeSettlement(txn)) return EXCLUDED("card payment or transfer", amount)
-    if (policy === "default-out")
+  if (isInternalTransfer(txn)) return EXCLUDED("internal account sweep", amount)
+  if (amount === 0) return EXCLUDED("zero amount", amount)
+
+  if (policy === "default-out") {
+    // `exclude_from_totals` is not consulted here: Fidelity's double entry sets
+    // it on real deposits as well as their sweeps, so it hides the very
+    // transactions a reimbursement needs.
+    if (CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`))
+      return EXCLUDED("credit card payment", amount)
+    if (amount < 0)
       return {
         bucket: "deposit",
         counts: false,
@@ -174,7 +192,21 @@ export function classify(txn: LmTransaction): Classification {
         amount,
         reason: "deposit — tag it `spending` if it reimburses one",
       }
-    // A merchant refund on the card gives the money straight back.
+    return {
+      bucket: "assumed-fixed",
+      counts: false,
+      reviewed: false,
+      taggable: true,
+      amount,
+      reason: "not counted — `spending` to include it, `recurring` to stop asking",
+    }
+  }
+
+  // The discretionary card. Lunch Money's exclude flag is trustworthy here —
+  // it is how a superseded pending duplicate is marked.
+  if (txn.exclude_from_totals) return EXCLUDED("excluded from totals in Lunch Money", amount)
+  if (amount < 0) {
+    if (looksLikeSettlement(txn)) return EXCLUDED("card payment or transfer", amount)
     return {
       bucket: "spending",
       counts: true,
@@ -184,32 +216,13 @@ export function classify(txn: LmTransaction): Classification {
       reason: "refund",
     }
   }
-
-  if (amount === 0) return EXCLUDED("zero amount", amount)
-
-  // Card autopays and transfers leave a fixed-cost account as positive
-  // amounts. They are not spending and never will be, so keep them out of the
-  // review queue rather than asking about the same $14k debit every day.
-  if (policy === "default-out" && looksLikeSettlement(txn))
-    return EXCLUDED("card payment or transfer", amount)
-
-  if (policy === "default-in")
-    return {
-      bucket: "spending",
-      counts: true,
-      reviewed: false,
-      taggable: true,
-      amount,
-      reason: "untagged on the discretionary card",
-    }
-
   return {
-    bucket: "assumed-fixed",
-    counts: false,
+    bucket: "spending",
+    counts: true,
     reviewed: false,
     taggable: true,
     amount,
-    reason: `not counted — \`spending\` to include it, \`recurring\` to stop asking`,
+    reason: "untagged on the discretionary card",
   }
 }
 

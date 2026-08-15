@@ -209,7 +209,7 @@ export function classify(txn: LmTransaction): Classification {
     reviewed: false,
     taggable: true,
     amount,
-    reason: `untagged on ${account} — tag it \`spending\` to count it`,
+    reason: `not counted — \`spending\` to include it, \`recurring\` to stop asking`,
   }
 }
 

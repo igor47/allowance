@@ -58,7 +58,7 @@ const Clock = ({ alert }: { alert: boolean }) => (
 )
 
 const Row = ({ label, value }: { label: string; value: string }) => (
-  <div class="d-flex justify-content-between gap-4">
+  <div class="sync-row d-flex justify-content-between gap-4">
     <span class="text-secondary">{label}</span>
     <span class="text-body">{value}</span>
   </div>

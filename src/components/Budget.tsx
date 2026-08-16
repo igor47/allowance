@@ -63,22 +63,24 @@ const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
     <div class="card border-secondary-subtle mb-3">
       <div class="card-body">
         <h2 class="h6 stat-label text-secondary mb-3">{caption}</h2>
-        <table class="table table-sm align-middle mb-0">
-          <thead>
-            <tr class="text-secondary small">
-              <th>Item</th>
-              <th>Cadence</th>
-              <th class="text-end">Each</th>
-              <th class="text-end">Per month</th>
-              <th class="text-end">State</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <Row key={c.id} c={c} />
-            ))}
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr class="text-secondary small">
+                <th>Item</th>
+                <th>Cadence</th>
+                <th class="text-end">Each</th>
+                <th class="text-end">Per month</th>
+                <th class="text-end">State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <Row key={c.id} c={c} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

@@ -370,3 +370,36 @@ describe("budget page", () => {
     expect(page.querySelector("form.dropdown-menu")?.getAttribute("action")).toBe("/budget")
   })
 })
+
+describe("phone layout", () => {
+  // The page must never scroll sideways: a 390px screen fits the navbar and
+  // the filters only because the brand hides and the filters wrap, and wide
+  // tables scroll inside their own box rather than dragging the page with them.
+  test("the brand hides on small screens, where the nav link says the same word", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    expect(page.querySelector(".navbar-brand")?.getAttribute("class")).toContain(
+      "d-none d-sm-inline"
+    )
+  })
+
+  test("the filter bar wraps instead of running off the edge", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    expect(page.querySelector("#txn-list .btn-group")?.getAttribute("class")).toContain("flex-wrap")
+  })
+
+  test("wide tables scroll inside their own container", async () => {
+    const home = await dom(await useTestApp().get("/"))
+    expect(home.querySelector(".table-responsive .txn-table")).not.toBeNull()
+    const budget = await dom(await useTestApp().get("/budget"))
+    expect(budget.querySelectorAll(".table-responsive table")).toHaveLength(2)
+  })
+
+  test("the sync menu only refuses to wrap on its label rows", async () => {
+    // Applying nowrap to every child stretched the queued sentence into one
+    // 609px line, which is wider than the phone it opens on.
+    const page = await dom(await useTestApp().post("/refresh"))
+    expect(page.querySelectorAll("#sync .sync-row").length).toBeGreaterThan(0)
+    const queued = page.querySelector("#sync .text-info")
+    expect(queued?.getAttribute("class")).not.toContain("sync-row")
+  })
+})

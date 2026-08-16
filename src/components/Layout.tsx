@@ -32,8 +32,10 @@ export const Layout = ({ title, user, nav, page, children }: PropsWithChildren<L
     </head>
     <body class="bg-body">
       <nav class="navbar navbar-expand border-bottom border-secondary-subtle mb-4">
-        <div class="container-xl">
-          <a class="navbar-brand fw-semibold me-3" href="/">
+        <div class="container-xl flex-nowrap gap-2">
+          {/* The brand says the same word as the first nav link; on a phone that
+              duplication is what pushes the clock off the screen. */}
+          <a class="navbar-brand fw-semibold me-3 d-none d-sm-inline" href="/">
             allowance
           </a>
           <ul class="navbar-nav flex-row gap-3">

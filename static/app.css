@@ -129,8 +129,18 @@
   min-width: 18rem;
 }
 
-.sync-menu > div {
+/*
+ * Only the label/value rows refuse to wrap. Applying this to every child made
+ * the queued sentence one long line, which stretched the menu to 609px and
+ * pushed it off a phone screen entirely.
+ */
+.sync-menu .sync-row {
   white-space: nowrap;
+}
+
+/* Never wider than the screen it is opening on. */
+.sync-menu {
+  max-width: calc(100vw - 1.5rem);
 }
 
 /* Two stacked selects, wide enough for "September" and a four-digit year. */

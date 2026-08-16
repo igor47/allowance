@@ -63,7 +63,8 @@ Tags are written straight back to Lunch Money, so they survive this app entirely
 | `ROLLOVER_CAP_DAYS` | `14` | days of target that can be banked |
 | `STATEMENT_CLOSE_DAY` | `12` | Card statement close |
 | `STATEMENT_DUE_DAY` | `9` | autopay debit, following month |
-| `CACHE_TTL_SECONDS` | `60` | their rate limit is aggressive |
+| `CACHE_TTL_SECONDS` | `300` | their rate limit is aggressive |
+| `REFRESH_AFTER_MINUTES` | `30` | age at which the dashboard offers a refresh |
 | `PORT` | `3005` | `3000` in the container |
 
 Account policy lives in `ACCOUNT_POLICY` in `src/domain/policy.ts` rather than

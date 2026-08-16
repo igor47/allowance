@@ -1,5 +1,11 @@
-import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
-import { fixtureAccounts, fixtureTransactions } from "./fixtures"
+import type {
+  LmPlaidAccount,
+  LmRecurringItem,
+  LmTag,
+  LmTransaction,
+  LunchMoneyClient,
+} from "../lunchmoney/types"
+import { fixtureAccounts, fixtureRecurring, fixtureTransactions } from "./fixtures"
 
 /** An in-memory Lunch Money. Writes are visible to subsequent reads. */
 export class FakeLunchMoneyClient implements LunchMoneyClient {
@@ -7,7 +13,11 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
   private readonly store: LmTransaction[]
   private readonly accounts: LmPlaidAccount[]
 
-  constructor(transactions: LmTransaction[] = fixtureTransactions, accounts = fixtureAccounts) {
+  constructor(
+    transactions: LmTransaction[] = fixtureTransactions,
+    accounts = fixtureAccounts,
+    private readonly recurring: LmRecurringItem[] = fixtureRecurring
+  ) {
     this.store = transactions.map((t) => ({ ...t, tags: [...t.tags] }))
     this.accounts = accounts
   }
@@ -17,6 +27,13 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
   async transactions(start: string, end: string): Promise<LmTransaction[]> {
     this.reads += 1
     return this.store.filter((t) => t.date >= start && t.date <= end)
+  }
+
+  async recurringItems(_start: string, _end: string): Promise<LmRecurringItem[]> {
+    this.reads += 1
+    // The fixture was recorded for one month; the range is not re-applied
+    // because a recurring item spans periods rather than falling inside one.
+    return this.recurring
   }
 
   async plaidAccounts(): Promise<LmPlaidAccount[]> {

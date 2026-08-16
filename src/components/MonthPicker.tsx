@@ -13,6 +13,8 @@ export interface MonthPickerProps {
   /** The latest month that can be asked for, as YYYY-MM. */
   latest: string
   filter?: string
+  /** Where the form submits — the page keeps you on it. */
+  action?: string
 }
 
 const MONTHS = [
@@ -35,7 +37,7 @@ export const monthLabel = (month: string): string => {
   return `${MONTHS[Number(m) - 1]} ${year}`
 }
 
-export const MonthPicker = ({ month, latest, filter }: MonthPickerProps) => {
+export const MonthPicker = ({ month, latest, filter, action = "/" }: MonthPickerProps) => {
   const [year, m] = month.split("-")
   const firstYear = Number(HISTORY_START.split("-")[0])
   const lastYear = Number(latest.split("-")[0])
@@ -55,7 +57,7 @@ export const MonthPicker = ({ month, latest, filter }: MonthPickerProps) => {
       <form
         class="dropdown-menu dropdown-menu-end month-menu p-2"
         method="get"
-        action="/"
+        action={action}
         data-autosubmit
       >
         {filter ? <input type="hidden" name="filter" value={filter} /> : null}

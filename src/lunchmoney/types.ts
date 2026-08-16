@@ -53,8 +53,40 @@ export interface LmPlaidAccount {
   plaid_last_successful_update: string | null
 }
 
+/**
+ * A repeating commitment or income stream, as Lunch Money models it.
+ *
+ * These exist independently of any transaction: an item on a manually-managed
+ * account will never have one linked, which is not an error — it is a
+ * subscription on a card Lunch Money cannot see, and the plan is all we get.
+ */
+export interface LmRecurringItem {
+  id: number
+  payee: string | null
+  description: string | null
+  /** Stringified decimal. Positive is an outflow, as with transactions. */
+  amount: string
+  currency: string
+  /** "monthly", "twice a month", "every 3 months", "once a week", "yearly"... */
+  cadence: string | null
+  /** "month" | "week" | "year" — with `quantity`, the machine-readable cadence. */
+  granularity: string | null
+  quantity: number | null
+  /** Next expected billing date in the queried range, YYYY-MM-DD. */
+  billing_date: string | null
+  category_id: number | null
+  is_income: boolean
+  /** Set when the item belongs to a linked (Plaid) account. */
+  plaid_account_id: number | null
+  /** Set instead when it belongs to a manually-managed account. */
+  asset_id: number | null
+  transactions_within_range: { id: number; date: string }[] | null
+  missing_dates_within_range: string[] | null
+}
+
 export interface LunchMoneyClient {
   transactions(start: string, end: string): Promise<LmTransaction[]>
+  recurringItems(start: string, end: string): Promise<LmRecurringItem[]>
   plaidAccounts(): Promise<LmPlaidAccount[]>
   tags(): Promise<LmTag[]>
   setTags(transactionId: number, tags: string[]): Promise<void>

@@ -318,3 +318,37 @@ describe("month picker", () => {
     expect(form?.querySelector("noscript button[type='submit']")).not.toBeNull()
   })
 })
+
+describe("budget page", () => {
+  test("derives a daily allowance from income minus commitments", async () => {
+    const page = await dom(await useTestApp().get("/budget"))
+    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("$197")
+    const summary = page.querySelector("#budget")?.textContent ?? ""
+    expect(summary).toContain("$15,413") // income
+    expect(summary).toContain("$9,293") // committed
+  })
+
+  test("says how much is committed on accounts with no transaction feed", async () => {
+    const page = await dom(await useTestApp().get("/budget"))
+    expect(page.querySelector("#budget")?.textContent).toContain("$744 untracked")
+  })
+
+  test("both pages are reachable from the navbar", async () => {
+    const page = await dom(await useTestApp().get("/budget"))
+    const links = Array.from(page.querySelectorAll("nav .nav-link"), (n) => [
+      n.getAttribute("href"),
+      n.textContent?.trim(),
+    ])
+    expect(links).toEqual([
+      ["/", "Allowance"],
+      ["/budget", "Budget"],
+    ])
+    // The page you are on is the marked one.
+    expect(page.querySelector("nav .nav-link.active")?.getAttribute("href")).toBe("/budget")
+  })
+
+  test("the month picker keeps you on the budget page", async () => {
+    const page = await dom(await useTestApp().get("/budget"))
+    expect(page.querySelector("form.dropdown-menu")?.getAttribute("action")).toBe("/budget")
+  })
+})

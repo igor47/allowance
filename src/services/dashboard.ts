@@ -8,9 +8,10 @@ import {
   computeAllowance,
   periodStartFor,
 } from "../domain/allowance"
+import { type BudgetView, budgetView } from "../domain/budget"
 import { type CycleTotal, cycleTotal, reconciliation, STATEMENT_ACCOUNT } from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
-import { addDays, type IsoDate } from "../domain/dates"
+import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
 import { unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
@@ -63,6 +64,22 @@ export class DashboardService {
     /** Injected so tests do not depend on the wall clock. */
     private readonly now: () => Date = () => new Date()
   ) {}
+
+  /**
+   * The plan for the month: recurring commitments and income.
+   *
+   * A separate read from the dashboard, and deliberately not folded into
+   * `build`: the allowance page has no use for it, and recurring items are
+   * configuration that changes a few times a year rather than hourly.
+   */
+  async budget(today: IsoDate): Promise<BudgetView> {
+    const start = startOfMonth(today)
+    const end = endOfMonth(today)
+    const items = await this.cache.fetch(`recurring:${start}:${end}`, () =>
+      this.client.recurringItems(start, end)
+    )
+    return budgetView(items, today)
+  }
 
   /** Force the next build to re-read from the API. */
   invalidate(): void {

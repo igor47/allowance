@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import type { AppEnv } from "../app"
+import { Budget } from "../components/Budget"
 import { Layout } from "../components/Layout"
 import { MonthPicker, monthLabel } from "../components/MonthPicker"
 import { Allowance, Boxes } from "../components/Summary"
@@ -74,6 +75,7 @@ dashboardRoutes.get("/", async (c) => {
     <Layout
       title={`allowance · ${monthLabel(view.month)}`}
       user={c.var.user}
+      page="allowance"
       nav={
         <>
           <MonthPicker month={view.month} latest={today.slice(0, 7)} filter={filter} />
@@ -107,6 +109,36 @@ dashboardRoutes.get("/", async (c) => {
         summary={summarise(entries)}
         month={view.isCurrent ? undefined : view.month}
       />
+    </Layout>
+  )
+})
+
+/**
+ * The plan behind the allowance: income, commitments, and the daily figure they
+ * imply. Reads recurring items rather than transactions, so it says what is
+ * meant to happen — including on accounts whose transactions we never see.
+ */
+dashboardRoutes.get("/budget", async (c) => {
+  const today = c.var.today()
+  const view = viewOf(c, today)
+  const [budget, dashboard] = await Promise.all([
+    c.var.service.budget(view.asOf),
+    c.var.service.build(view.asOf),
+  ])
+
+  return c.html(
+    <Layout
+      title={`budget · ${monthLabel(view.month)}`}
+      user={c.var.user}
+      page="budget"
+      nav={
+        <>
+          <MonthPicker month={view.month} latest={today.slice(0, 7)} action="/budget" />
+          <Sync dashboard={dashboard} />
+        </>
+      }
+    >
+      <Budget budget={budget} configuredTarget={dashboard.allowance.dailyTarget} />
     </Layout>
   )
 })

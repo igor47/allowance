@@ -1,4 +1,10 @@
-import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "./types"
+import type {
+  LmPlaidAccount,
+  LmRecurringItem,
+  LmTag,
+  LmTransaction,
+  LunchMoneyClient,
+} from "./types"
 
 const BASE = "https://api.lunchmoney.dev/v1/"
 const PAGE_SIZE = 500
@@ -77,6 +83,13 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
       if (!page.has_more || page.transactions.length === 0) return out
       offset += page.transactions.length
     }
+  }
+
+  /** Recurring items overlapping the range. Unpaginated; there are dozens, not thousands. */
+  async recurringItems(start: string, end: string): Promise<LmRecurringItem[]> {
+    return await this.request<LmRecurringItem[]>(
+      `recurring_items?start_date=${start}&end_date=${end}`
+    )
   }
 
   async plaidAccounts(): Promise<LmPlaidAccount[]> {

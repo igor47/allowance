@@ -6,9 +6,11 @@ export interface LayoutProps {
   user?: string
   /** Status controls that belong in the navbar rather than the page body. */
   nav?: unknown
+  /** Which of the two pages is showing, for the navbar's active state. */
+  page?: "allowance" | "budget"
 }
 
-export const Layout = ({ title, user, nav, children }: PropsWithChildren<LayoutProps>) => (
+export const Layout = ({ title, user, nav, page, children }: PropsWithChildren<LayoutProps>) => (
   <html lang="en" data-bs-theme="dark">
     <head>
       <meta charset="utf-8" />
@@ -31,9 +33,21 @@ export const Layout = ({ title, user, nav, children }: PropsWithChildren<LayoutP
     <body class="bg-body">
       <nav class="navbar navbar-expand border-bottom border-secondary-subtle mb-4">
         <div class="container-xl">
-          <a class="navbar-brand fw-semibold" href="/">
+          <a class="navbar-brand fw-semibold me-3" href="/">
             allowance
           </a>
+          <ul class="navbar-nav flex-row gap-3">
+            <li class="nav-item">
+              <a class={`nav-link ${page === "allowance" ? "active fw-semibold" : ""}`} href="/">
+                Allowance
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class={`nav-link ${page === "budget" ? "active fw-semibold" : ""}`} href="/budget">
+                Budget
+              </a>
+            </li>
+          </ul>
           <div class="ms-auto d-flex align-items-center gap-3">
             {user ? <span class="navbar-text small text-secondary">{user}</span> : null}
             {nav}

@@ -1,10 +1,16 @@
 /**
  * Reload the container on purr, after `publish:purr` has put the image there.
  *
- * `just reload` git-pulls compose.stacks and converges the whole stack, which
- * is what the runbook does — the pull matters because a version bump lives in
- * compose.yml, not here. Compose recreates the container when the image id
- * behind its tag changes, so a same-tag rebuild still takes effect.
+ * `git pull` then `just restart <service>`, deliberately not `just reload`.
+ * Reload converges all eleven services in the igor stack: it re-renders every
+ * service's config from secrets, applies whatever else happens to be committed
+ * in compose.stacks, and waits on every container's health. None of that
+ * belongs in shipping one stateless app — an unrelated sick service should not
+ * fail this deploy, and an unrelated pending commit should not ride along with
+ * it.
+ *
+ * The pull stays because a version bump lives in compose.yml on purr, not here.
+ * `restart` force-recreates, so a same-tag rebuild takes effect too.
  */
 
 import { HOST, SERVICE, STACK_DIR, capture, run, versionTag } from "./image"
@@ -14,10 +20,10 @@ if (!wanted) {
   throw new Error(`${versionTag} is not on ${HOST}; run \`mise run publish:purr\` first`)
 }
 
-await run(["ssh", HOST, `cd ${STACK_DIR} && just reload`])
+await run(["ssh", HOST, `cd ${STACK_DIR} && git pull && just restart ${SERVICE}`])
 
-// Verify by outcome rather than by trusting the reload: if compose.yml still
-// pins an older tag, `just reload` succeeds and quietly keeps the old image.
+// Verify by outcome rather than by trusting the restart: if compose.yml still
+// pins an older tag, the restart succeeds and quietly keeps the old image.
 const running = await capture([
   "ssh",
   HOST,

@@ -142,7 +142,7 @@ export class DashboardService {
       },
       transactions: inPeriod,
       // Deposits are taggable but not review items — payroll arriving twice a
-      // month is not a question anyone needs asked. They live under "credits".
+      // month is not a question anyone needs asked. They live under "deposits".
       needsReview: inPeriod.filter(
         (c) =>
           !c.classification.reviewed &&
@@ -217,7 +217,7 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
 }
 
 /** Filters offered in the transaction feed, in the order they are shown. */
-export const FILTERS = ["review", "spending", "credits", "all", "fixed", "igor", "serena"] as const
+export const FILTERS = ["review", "spending", "deposits", "all", "fixed", "igor", "serena"] as const
 export type Filter = (typeof FILTERS)[number]
 
 export function isFilter(value: string | undefined): value is Filter {
@@ -228,7 +228,7 @@ export function isFilter(value: string | undefined): value is Filter {
  * Worth a human's attention.
  *
  * Deposits are taggable but not review items — payroll arriving twice a month
- * is not a question anyone needs asked. They live under "credits", where a work
+ * is not a question anyone needs asked. They live under "deposits", where a work
  * reimbursement can be found when one turns up.
  */
 export function needsReview(entry: ClassifiedTransaction): boolean {
@@ -249,7 +249,7 @@ export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
   let counting = 0
   for (const entry of entries) {
     const amount = entry.classification.amount
-    if (entry.classification.bucket === "excluded") continue
+    if (entry.classification.bucket === "ignored") continue
     total += amount
     if (entry.classification.counts) counting += amount
   }
@@ -267,11 +267,11 @@ export function applyFilter(
       return transactions.filter((c) => c.classification.counts)
     // Money coming back: merchant refunds and bank deposits. This is where a
     // work expense reimbursement is found and tagged.
-    case "credits":
+    case "deposits":
       return transactions.filter((c) => c.classification.taggable && c.classification.amount < 0)
     case "fixed":
       return transactions.filter((c) =>
-        ["recurring", "irregular", "assumed-fixed"].includes(c.classification.bucket)
+        ["recurring", "irregular", "unclassified"].includes(c.classification.bucket)
       )
     case "igor":
     case "serena":

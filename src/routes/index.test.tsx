@@ -190,7 +190,7 @@ describe("caching", () => {
   })
 })
 
-describe("credits", () => {
+describe("deposits", () => {
   test("the credits filter surfaces refunds and deposits to tag", async () => {
     const page = await dom(await useTestApp().get("/?filter=credits"))
     const rows = page.querySelectorAll("tbody tr")

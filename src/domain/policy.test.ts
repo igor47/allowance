@@ -21,7 +21,7 @@ describe("account policy", () => {
     })
     const result = classify(rent)
     expect(result.counts).toBe(false)
-    expect(result.bucket).toBe("assumed-fixed")
+    expect(result.bucket).toBe("unclassified")
   })
 
   test("an explicit spending tag opts a cash withdrawal in", () => {
@@ -38,7 +38,7 @@ describe("account policy", () => {
   })
 
   test("dormant accounts are ignored entirely", () => {
-    expect(classify(txn({ account_display_name: "Old Card" })).bucket).toBe("excluded")
+    expect(classify(txn({ account_display_name: "Old Card" })).bucket).toBe("ignored")
   })
 
   test("unknown accounts default out and are surfaced", () => {
@@ -107,7 +107,7 @@ describe("negative amounts", () => {
       category_name: "Credit card payment",
     })
     const result = classify(autopay)
-    expect(result.bucket).toBe("excluded")
+    expect(result.bucket).toBe("ignored")
     expect(result.counts).toBe(false)
   })
 
@@ -118,7 +118,7 @@ describe("negative amounts", () => {
       payee: "A Property Manager",
       category_name: "Rent",
     })
-    expect(classify(rent).bucket).toBe("assumed-fixed")
+    expect(classify(rent).bucket).toBe("unclassified")
   })
 
   test("a merchant refund filed as Income still credits the allowance", () => {
@@ -203,15 +203,13 @@ describe("reimbursements", () => {
       category_name: "🔄 Payment, Transfer",
       exclude_from_totals: true,
     })
-    expect(classify(sweep).bucket).toBe("excluded")
+    expect(classify(sweep).bucket).toBe("ignored")
     expect(classify(sweep).reason).toBe("internal account sweep")
   })
 
   test("payroll and transfers are not reimbursements by default", () => {
     expect(classify(deposit({ payee: "DIRECT DEPOSIT SERVICECO MEPAYROLL" })).counts).toBe(false)
-    expect(classify(deposit({ payee: "REDEMPTION FROM CORE ACCOUNT FDIC" })).bucket).toBe(
-      "excluded"
-    )
+    expect(classify(deposit({ payee: "REDEMPTION FROM CORE ACCOUNT FDIC" })).bucket).toBe("ignored")
   })
 })
 

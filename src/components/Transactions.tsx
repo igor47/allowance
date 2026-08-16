@@ -10,15 +10,15 @@ const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
   spending: { label: "spending", class: "text-bg-primary" },
   recurring: { label: "recurring", class: "text-bg-secondary" },
   irregular: { label: "irregular", class: "text-bg-info" },
-  "assumed-fixed": { label: "assumed fixed", class: "text-bg-dark border border-secondary" },
+  unclassified: { label: "unclassified", class: "text-bg-dark border border-secondary" },
   deposit: { label: "deposit", class: "text-bg-success" },
-  excluded: { label: "excluded", class: "text-bg-dark border border-secondary" },
+  ignored: { label: "ignored", class: "text-bg-dark border border-secondary" },
 }
 
 const FILTER_LABEL: Record<Filter, string> = {
   review: "Needs review",
   spending: "Spending",
-  credits: "Credits",
+  deposits: "Deposits",
   all: "All",
   fixed: "Fixed",
   igor: "Igor",

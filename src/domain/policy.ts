@@ -63,16 +63,16 @@ export type Bucket =
   | "recurring"
   /** Lumpy but not a daily choice — memory care, vet emergencies, dental. */
   | "irregular"
-  /** Assumed fixed because it is on a default-out account and untagged. */
-  | "assumed-fixed"
+  /** Nobody has said what this is; it sits on a default-out account. */
+  | "unclassified"
   /**
    * Money arriving in a bank account: payroll, interest, a cheque, an expense
    * reimbursement. Not spending, but taggable — tagging a reimbursement
    * `spending` credits the allowance back for the purchase it repays.
    */
   | "deposit"
-  /** Transfers, payments, income, dormant accounts. Never a spend. */
-  | "excluded"
+  /** Transfers, payments, dormant accounts. Never a spend, never taggable. */
+  | "ignored"
 
 export interface Classification {
   bucket: Bucket
@@ -88,8 +88,8 @@ export interface Classification {
   reason: string
 }
 
-const EXCLUDED = (reason: string, amount: number): Classification => ({
-  bucket: "excluded",
+const IGNORED = (reason: string, amount: number): Classification => ({
+  bucket: "ignored",
   counts: false,
   reviewed: false,
   taggable: false,
@@ -146,7 +146,7 @@ export function classify(txn: LmTransaction): Classification {
   const policy = policyFor(account)
   const tags = tagNames(txn)
 
-  if (policy === "ignore") return EXCLUDED(`${account} is not tracked`, amount)
+  if (policy === "ignore") return IGNORED(`${account} is not tracked`, amount)
 
   // An explicit tag beats every heuristic, including Lunch Money's own exclude
   // flag. Without this a reimbursement could never be counted, because the
@@ -179,15 +179,15 @@ export function classify(txn: LmTransaction): Classification {
       reason: "tagged spending",
     }
 
-  if (isInternalTransfer(txn)) return EXCLUDED("internal account sweep", amount)
-  if (amount === 0) return EXCLUDED("zero amount", amount)
+  if (isInternalTransfer(txn)) return IGNORED("internal account sweep", amount)
+  if (amount === 0) return IGNORED("zero amount", amount)
 
   if (policy === "default-out") {
     // `exclude_from_totals` is not consulted here: Fidelity's double entry sets
     // it on real deposits as well as their sweeps, so it hides the very
     // transactions a reimbursement needs.
     if (CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`))
-      return EXCLUDED("credit card payment", amount)
+      return IGNORED("credit card payment", amount)
     if (amount < 0)
       return {
         bucket: "deposit",
@@ -198,7 +198,7 @@ export function classify(txn: LmTransaction): Classification {
         reason: "deposit — tag it `spending` if it reimburses one",
       }
     return {
-      bucket: "assumed-fixed",
+      bucket: "unclassified",
       counts: false,
       reviewed: false,
       taggable: true,
@@ -209,13 +209,17 @@ export function classify(txn: LmTransaction): Classification {
 
   // The discretionary card.
   //
-  // `exclude_from_totals` is NOT consulted, and neither is the category. Both
-  // follow from Lunch Money's categorisation, which is unreliable here: of the
-  // four excluded charges in three months, three were real — a $196 hotel
-  // deposit, a $6.87 coffee, and a $1,690 refund — all filed as "Payment,
-  // Transfer" and silently dropped. Only the payee reliably marks a payment.
+  // Categories here are good — 697 of 701 charges over three months carried a
+  // real merchant category and none were uncategorised. But roughly one a
+  // month lands in "Payment, Transfer" and picks up `exclude_from_totals` from
+  // it, and when that happens the charge is real: a hotel deposit, a coffee, a
+  // refund. Three were corrected by hand; another arrived the same week.
+  //
+  // So neither signal is consulted to *drop* a charge. Counting it and saying
+  // so in the reason errs towards overstating spend, which is the direction
+  // this file errs everywhere else. Only the payee marks a payment.
   if (amount < 0) {
-    if (isCardPayment(txn)) return EXCLUDED("payment against the card balance", amount)
+    if (isCardPayment(txn)) return IGNORED("payment against the card balance", amount)
     return {
       bucket: "spending",
       counts: true,

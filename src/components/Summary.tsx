@@ -1,6 +1,7 @@
 import { ago } from "../domain/freshness"
 import type { Dashboard } from "../services/dashboard"
 import { longDate, money, shortDate } from "./format"
+import { MonthChart } from "./MonthChart"
 
 const Stat = ({
   label,
@@ -70,59 +71,11 @@ export const Allowance = ({ dashboard }: { dashboard: Dashboard }) => {
                 </div>
               </div>
             </div>
-            <Sparkline dashboard={dashboard} />
+            <MonthChart allowance={allowance} />
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-const Sparkline = ({ dashboard }: { dashboard: Dashboard }) => {
-  const rows = dashboard.allowance.rows
-  if (rows.length < 2) return null
-
-  const width = 600
-  const height = 90
-  const values = rows.map((r) => r.balance)
-  const max = Math.max(...values, 0)
-  const min = Math.min(...values, 0)
-  const span = max - min || 1
-  const x = (i: number) => (i / (rows.length - 1)) * width
-  const y = (v: number) => height - ((v - min) / span) * height
-
-  const line = rows.map(
-    (r, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(r.balance).toFixed(1)}`
-  )
-  const zero = y(0)
-  const last = rows[rows.length - 1]
-
-  return (
-    <svg
-      class="sparkline mt-3"
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label="Allowance balance over the period"
-    >
-      <title>Allowance balance over the period</title>
-      <line
-        x1="0"
-        y1={zero}
-        x2={width}
-        y2={zero}
-        stroke="currentColor"
-        stroke-width="1"
-        opacity="0.25"
-      />
-      <path
-        d={line.join(" ")}
-        fill="none"
-        stroke={last && last.balance >= 0 ? "var(--bs-success)" : "var(--bs-danger)"}
-        stroke-width="2"
-        vector-effect="non-scaling-stroke"
-      />
-    </svg>
   )
 }
 

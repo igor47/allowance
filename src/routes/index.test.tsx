@@ -227,3 +227,26 @@ describe("row stability", () => {
     expect(after).toEqual(before)
   })
 })
+
+describe("the month chart", () => {
+  test("draws one hover column per day of the whole month, not just to today", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const columns = page.querySelectorAll(".month-chart-hover > div")
+    expect(columns).toHaveLength(31) // August, though the fixture stops on the 14th
+  })
+
+  test("labels each column with its date and exact amount", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const tips = Array.from(page.querySelectorAll(".month-chart-hover > div"), (n) =>
+      n.getAttribute("data-bs-title")
+    )
+    expect(tips[7]).toBe("Sat, Aug 8 · $677 spent")
+    expect(tips[13]).toBe("Fri, Aug 14 · $0 spent so far")
+    expect(tips[30]).toBe("Mon, Aug 31 · not yet")
+  })
+
+  test("the hover targets are HTML, because Popper cannot anchor to SVG", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    expect(page.querySelectorAll("svg [data-bs-toggle='tooltip']")).toHaveLength(0)
+  })
+})

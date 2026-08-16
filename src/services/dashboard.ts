@@ -6,6 +6,7 @@ import {
   type ClassifiedTransaction,
   classifyAll,
   computeAllowance,
+  periodStartFor,
 } from "../domain/allowance"
 import { type CycleTotal, cycleTotal, reconciliation, STATEMENT_ACCOUNT } from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
@@ -100,16 +101,14 @@ export class DashboardService {
     // to four days. Without the slack, a charge swiped just before a cycle
     // opened but posted just after it is missing from the statement total,
     // which understated the August bill by $303.
-    const earliest =
-      allowance.periodStart < cycles.lastClosed.start
-        ? allowance.periodStart
-        : cycles.lastClosed.start
+    const periodStart = periodStartFor(allowance, today)
+    const earliest = periodStart < cycles.lastClosed.start ? periodStart : cycles.lastClosed.start
     const start = addDays(earliest, -POSTING_SLACK_DAYS)
     const { transactions, accounts } = await this.load(start, today)
 
     const classified = classifyAll(transactions)
     const inPeriod = classified
-      .filter((c) => c.txn.date >= allowance.periodStart && c.txn.date <= today)
+      .filter((c) => c.txn.date >= periodStart && c.txn.date <= today)
       .sort((a, b) =>
         a.txn.date === b.txn.date ? b.txn.id - a.txn.id : b.txn.date.localeCompare(a.txn.date)
       )

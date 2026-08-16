@@ -9,7 +9,7 @@
 
 import type { AllowanceConfig } from "../config"
 import type { LmTransaction } from "../lunchmoney/types"
-import { daysBetween, eachDay, type IsoDate } from "./dates"
+import { daysBetween, eachDay, endOfMonth, type IsoDate, startOfMonth } from "./dates"
 import { type Classification, classify } from "./policy"
 
 export interface DayRow {
@@ -19,8 +19,24 @@ export interface DayRow {
   balance: number
 }
 
+/**
+ * The period is the calendar month containing `today`, so the balance starts
+ * from zero on the 1st: surplus is not banked across the boundary and a bad
+ * month is not carried into the next one.
+ *
+ * `config.periodStart` is a floor, not the start — it is the date the app began
+ * to have an opinion, and it only bites in the first month, when the month
+ * began before there was any data.
+ */
+export function periodStartFor(config: AllowanceConfig, today: IsoDate): IsoDate {
+  const monthStart = startOfMonth(today)
+  return monthStart > config.periodStart ? monthStart : config.periodStart
+}
+
 export interface AllowanceResult {
   periodStart: IsoDate
+  /** Last day of the period — in the future for all but the final day. */
+  periodEnd: IsoDate
   today: IsoDate
   days: number
   dailyTarget: number
@@ -50,7 +66,9 @@ export function computeAllowance(
   config: AllowanceConfig,
   today: IsoDate
 ): AllowanceResult {
-  const { periodStart, dailyTarget, rolloverCapDays } = config
+  const { dailyTarget, rolloverCapDays } = config
+  const periodStart = periodStartFor(config, today)
+  const periodEnd = endOfMonth(today)
   const cap = dailyTarget * rolloverCapDays
 
   const spentByDay = new Map<IsoDate, number>()
@@ -78,6 +96,7 @@ export function computeAllowance(
   const days = daysBetween(periodStart, today)
   return {
     periodStart,
+    periodEnd,
     today,
     days,
     dailyTarget,

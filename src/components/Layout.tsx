@@ -19,6 +19,12 @@ export const Layout = ({ title, user, children }: PropsWithChildren<LayoutProps>
       />
       <link rel="stylesheet" href="/static/app.css" />
       <script src="/static/htmx.min.js" defer />
+      {/* Popper is inside the bundle; it is what positions the chart tooltips. */}
+      <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        defer
+      />
+      <script src="/static/app.js" defer />
     </head>
     <body class="bg-body">
       <nav class="navbar navbar-expand border-bottom border-secondary-subtle mb-4">

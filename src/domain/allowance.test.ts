@@ -34,10 +34,10 @@ describe("rolling balance", () => {
   })
 
   test("banked money stops at the cap, and the loss is reported", () => {
-    const result = compute([], "2026-09-15") // 46 days at $200 = $9,200 earned
+    const result = compute([], "2026-09-20") // 20 days at $200 = $4,000 earned
     expect(result.cap).toBe(2800)
     expect(result.balance).toBe(2800)
-    expect(result.forfeited).toBeGreaterThan(6_000)
+    expect(result.forfeited).toBe(1_200)
   })
 
   test("the cap applies day by day, so a blowout cannot be pre-funded", () => {
@@ -84,5 +84,37 @@ describe("rolling balance", () => {
     )
     expect(result.spent).toBe(0)
     expect(result.balance).toBe(200)
+  })
+})
+
+describe("the period is the calendar month", () => {
+  test("the balance starts from zero on the 1st", () => {
+    // A blowout on the last day of August is not September's problem.
+    const result = compute([txn({ date: "2026-08-31", amount: "5000.00" })], "2026-09-02")
+    expect(result.periodStart).toBe("2026-09-01")
+    expect(result.days).toBe(2)
+    expect(result.spent).toBe(0)
+    expect(result.balance).toBe(400)
+  })
+
+  test("surplus does not bank across the boundary either", () => {
+    const august = compute([], "2026-08-31")
+    expect(august.balance).toBe(2800) // capped
+    const september = compute([], "2026-09-01")
+    expect(september.balance).toBe(200) // one day's target, not 3,000
+  })
+
+  test("periodStart floors at the configured date in the first month", () => {
+    // The app started on the 1st here, so this only shows up with a later floor.
+    const late: AllowanceConfig = { ...CONFIG, periodStart: "2026-08-10" }
+    const result = computeAllowance(classifyAll([]), late, "2026-08-12")
+    expect(result.periodStart).toBe("2026-08-10")
+    expect(result.days).toBe(3)
+  })
+
+  test("the period runs to the end of the month, not to today", () => {
+    const result = compute([], "2026-09-02")
+    expect(result.periodEnd).toBe("2026-09-30")
+    expect(result.rows).toHaveLength(2) // rows still stop at today
   })
 })

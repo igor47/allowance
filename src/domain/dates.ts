@@ -29,6 +29,14 @@ export function eachDay(start: IsoDate, end: IsoDate): IsoDate[] {
   return out
 }
 
+export function startOfMonth(date: IsoDate): IsoDate {
+  return format(parse(date).startOf("month"))
+}
+
+export function endOfMonth(date: IsoDate): IsoDate {
+  return format(parse(date).endOf("month"))
+}
+
 /** Today in the display timezone, as a calendar date. */
 export function today(timezone: string, now?: DateTime): IsoDate {
   return format((now ?? DateTime.now()).setZone(timezone))

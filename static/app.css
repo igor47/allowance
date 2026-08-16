@@ -50,10 +50,32 @@
   opacity: 0.4;
 }
 
-.sparkline {
+.month-chart {
+  position: relative;
+}
+
+/*
+ * Overlays the plot area only (the SVG viewBox is 144 tall, plotted between
+ * y=16 and y=120), so each column lines up with the bar underneath it.
+ */
+.month-chart-hover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11.1%;
+  bottom: 16.7%;
+  display: flex;
+}
+
+.month-chart-hover > div {
+  flex: 1 1 0;
+}
+
+.month-chart svg {
   width: 100%;
-  height: 90px;
+  height: auto;
   display: block;
+  overflow: visible;
 }
 
 .txn-posted {

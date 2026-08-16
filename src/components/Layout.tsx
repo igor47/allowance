@@ -4,9 +4,11 @@ export interface LayoutProps {
   title: string
   /** From authentik's forward-auth headers, when present. */
   user?: string
+  /** Status controls that belong in the navbar rather than the page body. */
+  nav?: unknown
 }
 
-export const Layout = ({ title, user, children }: PropsWithChildren<LayoutProps>) => (
+export const Layout = ({ title, user, nav, children }: PropsWithChildren<LayoutProps>) => (
   <html lang="en" data-bs-theme="dark">
     <head>
       <meta charset="utf-8" />
@@ -32,7 +34,10 @@ export const Layout = ({ title, user, children }: PropsWithChildren<LayoutProps>
           <a class="navbar-brand fw-semibold" href="/">
             allowance
           </a>
-          {user ? <span class="navbar-text small text-secondary">{user}</span> : null}
+          <div class="ms-auto d-flex align-items-center gap-3">
+            {user ? <span class="navbar-text small text-secondary">{user}</span> : null}
+            {nav}
+          </div>
         </div>
       </nav>
       <main class="container-xl pb-5">{children}</main>

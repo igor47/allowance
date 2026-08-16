@@ -118,11 +118,22 @@ describe("tagging", () => {
 })
 
 describe("sync", () => {
-  test("shows how stale the data is and offers a refresh", async () => {
+  test("lives in the navbar and says how stale the data is", async () => {
     const page = await dom(await useTestApp().get("/"))
     const sync = page.querySelector("#sync")?.textContent ?? ""
-    expect(sync).toContain("newest transaction")
-    expect(page.querySelector("#sync button")?.getAttribute("hx-post")).toBe("/refresh")
+    // The fixture was last checked 29h ago, which is past a day.
+    expect(sync).toContain("Stale")
+    expect(sync).toContain("Newest transaction")
+    expect(page.querySelector("nav #sync")).not.toBeNull()
+    expect(page.querySelector("#sync [hx-post='/refresh']")).not.toBeNull()
+  })
+
+  test("the clock carries a shape cue, not just a colour", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const toggle = page.querySelector("#sync button")
+    expect(toggle?.getAttribute("class")).toContain("text-danger")
+    // The corner dot only appears when it is not fresh.
+    expect(page.querySelectorAll("#sync svg circle")).toHaveLength(2)
   })
 
   test("refreshing queues a pull and says so", async () => {

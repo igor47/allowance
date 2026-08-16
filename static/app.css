@@ -120,3 +120,15 @@
 .htmx-request .tag-btn {
   opacity: 0.45;
 }
+
+/*
+ * Wide enough that "Last new one arrived" and "29h ago" sit on one line each;
+ * Bootstrap's default 10rem wraps every value onto a second row.
+ */
+.sync-menu {
+  min-width: 18rem;
+}
+
+.sync-menu > div {
+  white-space: nowrap;
+}

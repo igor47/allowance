@@ -62,6 +62,24 @@ export function freshness(
   }
 }
 
+/**
+ * Three states, because a clock face in a navbar can only say so much.
+ *
+ * `aging` starts where the automatic refresh would have fired: past that point
+ * nobody has asked Plaid for anything recently. `stale` is a day, which is
+ * roughly the interval at which transactions actually land — beyond it, the
+ * numbers are probably missing a day of spending rather than an hour of it.
+ */
+export type Staleness = "fresh" | "aging" | "stale"
+
+const STALE_AFTER_MINUTES = 24 * 60
+
+export function staleness(f: Freshness): Staleness {
+  if (f.minutesSinceFetch === null) return "stale"
+  if (!f.shouldRefresh) return "fresh"
+  return f.minutesSinceFetch < STALE_AFTER_MINUTES ? "aging" : "stale"
+}
+
 /** "19h ago", "4m ago" — precision nobody needs is precision nobody reads. */
 export function ago(then: Date | null, now: Date = new Date()): string {
   if (!then) return "never"

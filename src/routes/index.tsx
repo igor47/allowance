@@ -1,7 +1,8 @@
 import { Hono } from "hono"
 import type { AppEnv } from "../app"
 import { Layout } from "../components/Layout"
-import { Allowance, Boxes, Sync } from "../components/Summary"
+import { Allowance, Boxes } from "../components/Summary"
+import { Sync } from "../components/Sync"
 import { TransactionList, TransactionRow } from "../components/Transactions"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
@@ -25,14 +26,13 @@ dashboardRoutes.get("/", async (c) => {
   void c.var.service.maybeRefresh(dashboard.freshness)
 
   return c.html(
-    <Layout title="allowance" user={c.var.user}>
+    <Layout title="allowance" user={c.var.user} nav={<Sync dashboard={dashboard} />}>
       {dashboard.unknownAccounts.length > 0 ? (
         <div class="alert alert-warning py-2 small">
           Not counted — no policy for {dashboard.unknownAccounts.join(", ")}. Add it to
           <code class="ms-1">ACCOUNT_POLICY</code>.
         </div>
       ) : null}
-      <Sync dashboard={dashboard} />
       <Allowance dashboard={dashboard} />
       <Boxes dashboard={dashboard} />
       <TransactionList

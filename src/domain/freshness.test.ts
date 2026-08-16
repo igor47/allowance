@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { LmPlaidAccount } from "../lunchmoney/types"
-import { ago, freshness } from "./freshness"
+import { ago, freshness, staleness } from "./freshness"
 
 const NOW = new Date("2026-08-14T23:32:00Z")
 
@@ -81,5 +81,34 @@ describe("ago", () => {
     expect(ago(new Date("2026-08-14T04:52:15Z"), NOW)).toBe("18h ago")
     expect(ago(new Date("2026-08-11T04:52:15Z"), NOW)).toBe("3d ago")
     expect(ago(null, NOW)).toBe("never")
+  })
+})
+
+describe("staleness", () => {
+  const at = (minutesSinceFetch: number | null, shouldRefresh: boolean) =>
+    staleness({
+      transactionsAt: null,
+      newestTransaction: null,
+      balancesAt: null,
+      lastFetchAt: null,
+      minutesSinceFetch,
+      shouldRefresh,
+    })
+
+  test("fresh while the automatic refresh has not come due", () => {
+    expect(at(5, false)).toBe("fresh")
+  })
+
+  test("aging once it has, up to a day", () => {
+    expect(at(31, true)).toBe("aging")
+    expect(at(23 * 60, true)).toBe("aging")
+  })
+
+  test("stale past a day, which is about how often transactions land", () => {
+    expect(at(24 * 60, true)).toBe("stale")
+  })
+
+  test("never having fetched is stale, not fresh", () => {
+    expect(at(null, true)).toBe("stale")
   })
 })

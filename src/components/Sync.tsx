@@ -6,6 +6,10 @@
  * matters at a glance is one of three, so it is a coloured clock; the detail
  * and the refresh button live behind it, a click away.
  *
+ * Three rows, not four: `balance_last_update` lands half a second after
+ * `last_fetch` on every account, so a "balances read" row said the same thing
+ * as "banks polled" in every case that rounding to minutes can distinguish.
+ *
  * Refreshing queues a background job on Lunch Money's side — there is nothing
  * to show synchronously, which is why the queued state says so plainly and
  * then re-checks itself rather than pretending to have finished.
@@ -69,8 +73,8 @@ export const Sync = ({ dashboard, queued = false }: SyncProps) => {
         data-bs-toggle="dropdown"
         data-bs-auto-close="outside"
         aria-expanded={queued ? "true" : "false"}
-        aria-label={`Data sync: ${word.toLowerCase()}. Checked ${ago(freshness.lastFetchAt)}.`}
-        title={`${word} · checked ${ago(freshness.lastFetchAt)}`}
+        aria-label={`Data sync: ${word.toLowerCase()}. Banks polled ${ago(freshness.lastFetchAt)}.`}
+        title={`${word} · banks polled ${ago(freshness.lastFetchAt)}`}
       >
         <Clock alert={state !== "fresh"} />
       </button>
@@ -82,13 +86,12 @@ export const Sync = ({ dashboard, queued = false }: SyncProps) => {
       */}
       <div class={`dropdown-menu dropdown-menu-end sync-menu p-3 small ${queued ? "show" : ""}`}>
         <div class={`fw-semibold mb-2 ${color}`}>{word}</div>
-        <Row label="Checked" value={ago(freshness.lastFetchAt)} />
+        <Row label="Banks polled" value={ago(freshness.lastFetchAt)} />
         <Row
           label="Newest transaction"
           value={freshness.newestTransaction ? shortDate(freshness.newestTransaction) : "none"}
         />
-        <Row label="Last new one arrived" value={ago(freshness.transactionsAt)} />
-        <Row label="Balances read" value={ago(freshness.balancesAt)} />
+        <Row label="New data arrived" value={ago(freshness.transactionsAt)} />
 
         {queued ? (
           <div class="text-info mt-2">

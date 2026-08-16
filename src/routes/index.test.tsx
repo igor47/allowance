@@ -123,7 +123,11 @@ describe("sync", () => {
     const sync = page.querySelector("#sync")?.textContent ?? ""
     // The fixture was last checked 29h ago, which is past a day.
     expect(sync).toContain("Stale")
+    expect(sync).toContain("Banks polled")
     expect(sync).toContain("Newest transaction")
+    // balance_last_update lands half a second after last_fetch, so it is not
+    // a separate fact and is deliberately not shown.
+    expect(sync).not.toContain("Balances read")
     expect(page.querySelector("nav #sync")).not.toBeNull()
     expect(page.querySelector("#sync [hx-post='/refresh']")).not.toBeNull()
   })
@@ -259,5 +263,47 @@ describe("the month chart", () => {
   test("the hover targets are HTML, because Popper cannot anchor to SVG", async () => {
     const page = await dom(await useTestApp().get("/"))
     expect(page.querySelectorAll("svg [data-bs-toggle='tooltip']")).toHaveLength(0)
+  })
+})
+
+describe("month picker", () => {
+  test("shows the current month by default", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    expect(page.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("August 2026")
+  })
+
+  test("a past month is rebuilt as of its last day", async () => {
+    const page = await dom(await useTestApp().get("/?month=2026-07"))
+    expect(page.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("July 2026")
+    // 252 real July transactions in the fixture, against 31 days of target.
+    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("-$3,308")
+    expect(page.querySelectorAll(".month-chart-hover > div")).toHaveLength(31)
+  })
+
+  test("says the cash figures are not historical", async () => {
+    const page = await dom(await useTestApp().get("/?month=2026-07"))
+    expect(page.querySelector(".alert")?.textContent).toContain("as it stands now")
+  })
+
+  test("keeps the month on filter links so it is not lost on a click", async () => {
+    const page = await dom(await useTestApp().get("/?month=2026-07"))
+    const href = page.querySelector("#txn-list a")?.getAttribute("hx-get")
+    expect(href).toContain("month=2026-07")
+  })
+
+  test("clamps a month beyond the data, in both directions", async () => {
+    const { get } = useTestApp()
+    const future = await dom(await get("/?y=2030&m=12"))
+    expect(future.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("August 2026")
+    const ancient = await dom(await get("/?month=2019-03"))
+    expect(ancient.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("January 2025")
+  })
+
+  test("the form asks for a month by number, so it needs no javascript", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const form = page.querySelector("form.dropdown-menu")
+    expect(form?.getAttribute("method")).toBe("get")
+    expect(form?.querySelector("select[name='m']")).not.toBeNull()
+    expect(form?.querySelector("select[name='y']")).not.toBeNull()
   })
 })

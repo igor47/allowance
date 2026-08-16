@@ -50,3 +50,10 @@ export const config: Config = {
   statementCloseDay: int("STATEMENT_CLOSE_DAY", 12),
   statementDueDay: int("STATEMENT_DUE_DAY", 9),
 }
+
+/**
+ * How far back the month picker offers to go. Hardcoded because the app has no
+ * way to ask Lunch Money when the data actually begins without a wide query
+ * against a rate limit that does not welcome one.
+ */
+export const HISTORY_START = "2025-01"

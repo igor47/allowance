@@ -112,6 +112,14 @@ describe("the period is the calendar month", () => {
     expect(result.days).toBe(3)
   })
 
+  test("a month before the configured start is still a whole month", () => {
+    // Browsing history predates the app; those months are not empty.
+    const result = compute([txn({ date: "2026-07-20", amount: "50.00" })], "2026-07-31")
+    expect(result.periodStart).toBe("2026-07-01")
+    expect(result.days).toBe(31)
+    expect(result.spent).toBe(50)
+  })
+
   test("the period runs to the end of the month, not to today", () => {
     const result = compute([], "2026-09-02")
     expect(result.periodEnd).toBe("2026-09-30")

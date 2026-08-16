@@ -25,12 +25,17 @@ export interface DayRow {
  * month is not carried into the next one.
  *
  * `config.periodStart` is a floor, not the start — it is the date the app began
- * to have an opinion, and it only bites in the first month, when the month
+ * to have an opinion, and it only bites within its own month, when that month
  * began before there was any data.
  */
 export function periodStartFor(config: AllowanceConfig, today: IsoDate): IsoDate {
   const monthStart = startOfMonth(today)
-  return monthStart > config.periodStart ? monthStart : config.periodStart
+  // The floor only binds inside its own month. It exists for the case where the
+  // app began partway through a month and the days before it hold no decisions
+  // anyone made; applied to every earlier month it would empty them out, which
+  // matters now that past months can be browsed.
+  const sameMonth = startOfMonth(config.periodStart) === monthStart
+  return sameMonth && config.periodStart > monthStart ? config.periodStart : monthStart
 }
 
 export interface AllowanceResult {

@@ -31,17 +31,19 @@ const TagButton = ({
   label,
   active,
   style,
+  month,
 }: {
   id: number
   tag: string
   label: string
   active: boolean
   style: string
+  month?: string
 }) => (
   <button
     type="button"
     class={`btn tag-btn ${active ? style : "btn-outline-secondary"}`}
-    hx-post={`/transactions/${id}/tag?tag=${tag}`}
+    hx-post={`/transactions/${id}/tag?tag=${tag}${month ? `&month=${month}` : ""}`}
     hx-target="closest tr"
     hx-swap="outerHTML"
     title={active ? `Remove ${tag}` : `Tag as ${tag}`}
@@ -50,7 +52,13 @@ const TagButton = ({
   </button>
 )
 
-export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
+export const TransactionRow = ({
+  entry,
+  month,
+}: {
+  entry: ClassifiedTransaction
+  month?: string
+}) => {
   const { txn, classification } = entry
   const tags = txn.tags.map((t) => t.name.toLowerCase())
   const account = accountNameOf(txn)
@@ -113,6 +121,7 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
           <>
             <div class="btn-group tag-group me-1">
               <TagButton
+                month={month}
                 id={txn.id}
                 tag="spending"
                 label="spend"
@@ -120,6 +129,7 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
                 style="btn-primary"
               />
               <TagButton
+                month={month}
                 id={txn.id}
                 tag="recurring"
                 label="recur"
@@ -127,6 +137,7 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
                 style="btn-secondary"
               />
               <TagButton
+                month={month}
                 id={txn.id}
                 tag="irregular"
                 label="irreg"
@@ -136,6 +147,7 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
             </div>
             <div class="btn-group tag-group">
               <TagButton
+                month={month}
                 id={txn.id}
                 tag="igor"
                 label="I"
@@ -143,6 +155,7 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
                 style="btn-light"
               />
               <TagButton
+                month={month}
                 id={txn.id}
                 tag="serena"
                 label="S"
@@ -160,6 +173,8 @@ export const TransactionRow = ({ entry }: { entry: ClassifiedTransaction }) => {
 }
 
 export interface TransactionListProps {
+  /** Set only when a past month is being viewed, so links stay in that month. */
+  month?: string
   entries: ClassifiedTransaction[]
   filter: Filter
   needsReview: number
@@ -171,6 +186,7 @@ export const TransactionList = ({
   filter,
   needsReview,
   summary,
+  month,
 }: TransactionListProps) => (
   <div id="txn-list">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
@@ -179,11 +195,11 @@ export const TransactionList = ({
         {FILTERS.map((f) => (
           <a
             class={`btn ${f === filter ? "btn-secondary" : "btn-outline-secondary"}`}
-            href={`/?filter=${f}`}
-            hx-get={`/transactions?filter=${f}`}
+            href={`/?filter=${f}${month ? `&month=${month}` : ""}`}
+            hx-get={`/transactions?filter=${f}${month ? `&month=${month}` : ""}`}
             hx-target="#txn-list"
             hx-swap="outerHTML"
-            hx-push-url={`/?filter=${f}`}
+            hx-push-url={`/?filter=${f}${month ? `&month=${month}` : ""}`}
           >
             {FILTER_LABEL[f]}
             {f === "review" && needsReview > 0 ? (
@@ -213,7 +229,7 @@ export const TransactionList = ({
         <table class="table table-sm txn-table align-middle mb-0">
           <tbody>
             {entries.map((entry) => (
-              <TransactionRow entry={entry} />
+              <TransactionRow entry={entry} month={month} />
             ))}
           </tbody>
         </table>

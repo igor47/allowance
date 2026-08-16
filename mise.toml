@@ -45,6 +45,16 @@ description = "One-shot live API fetch + print, to eyeball real numbers (manual 
 run = "bun run scripts/smoke.ts"
 
 [tasks.publish]
-description = "Build and push the container image. Gated on check + test."
+description = "Build and push the container image to ghcr. Gated on check + test."
 depends = ["check", "test"]
 run = "bun run scripts/publish.ts"
+
+[tasks."publish:purr"]
+description = "Build and stream the image straight to purr over ssh, no registry"
+depends = ["check", "test"]
+run = "bun run scripts/publish-purr.ts"
+
+[tasks.deploy]
+description = "Ship the image to purr and reload the container there"
+depends = ["publish:purr"]
+run = "bun run scripts/deploy.ts"

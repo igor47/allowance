@@ -1,31 +1,19 @@
 /**
- * Build and push the container image.
+ * Build the image and push it to ghcr.
  *
  * Invoked through `mise run publish`, which depends on `check` and `test` — so
  * an unchecked image cannot reach the registry. That dependency is the release
  * gate, and it is why this project does not need CI: the laptop and purr are
  * both x86_64, so a local build produces a runnable image.
+ *
+ * Note that purr does not pull from here — see `publish:purr`. This push is a
+ * backup and an audit trail, not the delivery path.
  */
 
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import pkg from "../package.json"
-
-const IMAGE = process.env.IMAGE ?? "ghcr.io/igor47/allowance"
-const version = process.env.VERSION ?? pkg.version
-const tags = [`${IMAGE}:${version}`, `${IMAGE}:latest`]
-
-async function run(command: string[], env?: Record<string, string>): Promise<void> {
-  console.log(`$ ${command.join(" ")}`)
-  const proc = Bun.spawn(command, {
-    stdout: "inherit",
-    stderr: "inherit",
-    env: env ? { ...process.env, ...env } : process.env,
-  })
-  const code = await proc.exited
-  if (code !== 0) throw new Error(`${command[0]} exited with ${code}`)
-}
+import { IMAGE, buildImage, gitStatus, requireCleanTree, run, tags } from "./image"
 
 /** Read a fresh ghcr token out of the gh CLI, which keeps it in the system keyring. */
 async function ghToken(): Promise<string> {
@@ -69,20 +57,12 @@ async function withGhcrAuth(body: (env: Record<string, string>) => Promise<void>
   }
 }
 
-const dirty = (await new Response(Bun.spawn(["git", "status", "--porcelain"]).stdout).text()).trim()
-if (dirty && !process.env.ALLOW_DIRTY) {
-  console.error("working tree is dirty; commit first or set ALLOW_DIRTY=1\n")
-  console.error(dirty)
-  process.exit(1)
-}
-
-// Build under the ambient docker config: it is the one with the credential
-// helpers and buildx state, and the base image is public anyway.
-await run(["docker", "build", ...tags.flatMap((t) => ["-t", t]), "."])
+requireCleanTree(await gitStatus())
+await buildImage()
 
 await withGhcrAuth(async (env) => {
   for (const tag of tags) await run(["docker", "push", tag], env)
 })
 
 console.log(`\npushed ${tags.join(" and ")}`)
-console.log("now pin the version in compose.stacks/hosts/igor/compose.yml and `just reload`")
+console.log("to put it on purr: mise run deploy")

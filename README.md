@@ -84,8 +84,14 @@ Registry auth comes from `gh auth token` at push time, so there is no PAT to
 manage and nothing stored in `~/.docker/config.json`. See
 [`docs/deploy.md`](docs/deploy.md).
 
-Then pin the new tag in `compose.stacks/hosts/igor/compose.yml` and `just reload`
-on purr.
+Then pin the new tag in `compose.stacks/hosts/igor/compose.yml` and:
+
+```sh
+mise run deploy      # streams the image to purr over ssh, reloads the container
+```
+
+purr cannot pull from ghcr — it holds no credentials and the package is
+private — so `deploy` is the delivery path and `publish` is the backup.
 
 ## Reading the reconciliation line
 

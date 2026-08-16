@@ -121,8 +121,10 @@ describe("sync", () => {
   test("lives in the navbar and says how stale the data is", async () => {
     const page = await dom(await useTestApp().get("/"))
     const sync = page.querySelector("#sync")?.textContent ?? ""
-    // The fixture was last checked 29h ago, which is past a day.
-    expect(sync).toContain("Stale")
+    // New transactions arrived 19h ago, which is inside the day: green. The
+    // banks were last polled 29h ago, which used to drive this and would have
+    // said "stale" for what is in fact current data.
+    expect(sync).toContain("Up to date")
     expect(sync).toContain("Banks polled")
     expect(sync).toContain("Newest transaction")
     // balance_last_update lands half a second after last_fetch, so it is not
@@ -132,12 +134,18 @@ describe("sync", () => {
     expect(page.querySelector("#sync [hx-post='/refresh']")).not.toBeNull()
   })
 
-  test("the clock carries a shape cue, not just a colour", async () => {
+  test("the clock is plain while the data is fresh", async () => {
     const page = await dom(await useTestApp().get("/"))
     const toggle = page.querySelector("#sync button")
-    expect(toggle?.getAttribute("class")).toContain("text-danger")
-    // The corner dot only appears when it is not fresh.
-    expect(page.querySelectorAll("#sync svg circle")).toHaveLength(2)
+    expect(toggle?.getAttribute("class")).toContain("text-success")
+    // The corner dot is the shape cue for "not fresh", so it is absent here;
+    // the state thresholds themselves are covered in freshness.test.ts.
+    expect(page.querySelectorAll("#sync svg circle")).toHaveLength(1)
+  })
+
+  test("says how old the page's own copy of the data is", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    expect(page.querySelector("#sync")?.textContent).toContain("This page read")
   })
 
   test("refreshing queues a pull and says so", async () => {
@@ -299,11 +307,14 @@ describe("month picker", () => {
     expect(ancient.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("January 2025")
   })
 
-  test("the form asks for a month by number, so it needs no javascript", async () => {
+  test("the form asks for a month by number, and submits itself", async () => {
     const page = await dom(await useTestApp().get("/"))
     const form = page.querySelector("form.dropdown-menu")
     expect(form?.getAttribute("method")).toBe("get")
+    expect(form?.hasAttribute("data-autosubmit")).toBe(true)
     expect(form?.querySelector("select[name='m']")).not.toBeNull()
     expect(form?.querySelector("select[name='y']")).not.toBeNull()
+    // The submit button is the no-javascript fallback, not the normal path.
+    expect(form?.querySelector("noscript button[type='submit']")).not.toBeNull()
   })
 })

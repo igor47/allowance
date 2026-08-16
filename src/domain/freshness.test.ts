@@ -85,30 +85,35 @@ describe("ago", () => {
 })
 
 describe("staleness", () => {
-  const at = (minutesSinceFetch: number | null, shouldRefresh: boolean) =>
+  const arrived = (minutesSinceImport: number | null) =>
     staleness({
       transactionsAt: null,
       newestTransaction: null,
       balancesAt: null,
       lastFetchAt: null,
-      minutesSinceFetch,
-      shouldRefresh,
+      minutesSinceFetch: 9999,
+      minutesSinceImport,
+      shouldRefresh: true,
     })
 
-  test("fresh while the automatic refresh has not come due", () => {
-    expect(at(5, false)).toBe("fresh")
+  test("fresh while data arrived within the day", () => {
+    expect(arrived(5)).toBe("fresh")
+    expect(arrived(23 * 60)).toBe("fresh")
   })
 
-  test("aging once it has, up to a day", () => {
-    expect(at(31, true)).toBe("aging")
-    expect(at(23 * 60, true)).toBe("aging")
+  test("aging after a day, stale after three", () => {
+    expect(arrived(24 * 60)).toBe("aging")
+    expect(arrived(71 * 60)).toBe("aging")
+    expect(arrived(72 * 60)).toBe("stale")
   })
 
-  test("stale past a day, which is about how often transactions land", () => {
-    expect(at(24 * 60, true)).toBe("stale")
+  test("never having imported is stale, not fresh", () => {
+    expect(arrived(null)).toBe("stale")
   })
 
-  test("never having fetched is stale, not fresh", () => {
-    expect(at(null, true)).toBe("stale")
+  test("a quiet bank does not turn the clock red", () => {
+    // last_fetch is old because imports are webhook-driven and nothing was
+    // posted; the data itself is current, so this must stay fresh.
+    expect(arrived(30)).toBe("fresh")
   })
 })

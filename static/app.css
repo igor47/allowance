@@ -132,3 +132,8 @@
 .sync-menu > div {
   white-space: nowrap;
 }
+
+/* Two stacked selects, wide enough for "September" and a four-digit year. */
+.month-menu {
+  min-width: 9rem;
+}

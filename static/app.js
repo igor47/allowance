@@ -36,3 +36,13 @@ function initTooltips() {
 
 document.addEventListener("DOMContentLoaded", initTooltips)
 document.body.addEventListener("htmx:afterSettle", initTooltips)
+
+/*
+ * Selects that submit their own form, so picking a month takes one click
+ * instead of two. Delegated from the document because the form is re-rendered
+ * on every navigation.
+ */
+document.addEventListener("change", (event) => {
+  const form = event.target.closest?.("form[data-autosubmit]")
+  if (form) form.submit()
+})

@@ -13,15 +13,26 @@
  * Refreshing queues a background job on Lunch Money's side — there is nothing
  * to show synchronously, which is why the queued state says so plainly and
  * then re-checks itself rather than pretending to have finished.
+ *
+ * The button is never disabled. Even when it is too soon to ask Plaid again it
+ * re-reads Lunch Money, which is the part that matters when two people are
+ * tagging from two phones.
  */
 
 import { ago, staleness } from "../domain/freshness"
 import type { Dashboard } from "../services/dashboard"
 import { shortDate } from "./format"
 
+/**
+ * `queued` — Lunch Money accepted a pull from Plaid.
+ * `reloaded` — too soon to ask Plaid, so we re-read Lunch Money instead, which
+ * is what picks up tagging done by the other person on their phone.
+ */
+export type SyncState = "idle" | "queued" | "reloaded"
+
 export interface SyncProps {
   dashboard: Dashboard
-  queued?: boolean
+  state?: SyncState
 }
 
 const TONE = {
@@ -53,8 +64,9 @@ const Row = ({ label, value }: { label: string; value: string }) => (
   </div>
 )
 
-export const Sync = ({ dashboard, queued = false }: SyncProps) => {
-  const { freshness } = dashboard
+export const Sync = ({ dashboard, state: action = "idle" }: SyncProps) => {
+  const queued = action === "queued"
+  const { freshness, now } = dashboard
   const state = staleness(freshness)
   const { color, word } = TONE[state]
 
@@ -72,9 +84,9 @@ export const Sync = ({ dashboard, queued = false }: SyncProps) => {
         class={`btn btn-sm btn-link p-1 lh-1 ${color}`}
         data-bs-toggle="dropdown"
         data-bs-auto-close="outside"
-        aria-expanded={queued ? "true" : "false"}
-        aria-label={`Data sync: ${word.toLowerCase()}. Banks polled ${ago(freshness.lastFetchAt)}.`}
-        title={`${word} · banks polled ${ago(freshness.lastFetchAt)}`}
+        aria-expanded={action === "idle" ? "false" : "true"}
+        aria-label={`Data sync: ${word.toLowerCase()}. Banks polled ${ago(freshness.lastFetchAt, now)}.`}
+        title={`${word} · banks polled ${ago(freshness.lastFetchAt, now)}`}
       >
         <Clock alert={state !== "fresh"} />
       </button>
@@ -84,18 +96,27 @@ export const Sync = ({ dashboard, queued = false }: SyncProps) => {
         visible without a second click — the swap that delivers it also closes
         whatever the click had opened.
       */}
-      <div class={`dropdown-menu dropdown-menu-end sync-menu p-3 small ${queued ? "show" : ""}`}>
+      <div
+        class={`dropdown-menu dropdown-menu-end sync-menu p-3 small ${action === "idle" ? "" : "show"}`}
+      >
         <div class={`fw-semibold mb-2 ${color}`}>{word}</div>
-        <Row label="Banks polled" value={ago(freshness.lastFetchAt)} />
+        <Row label="Banks polled" value={ago(freshness.lastFetchAt, now)} />
         <Row
           label="Newest transaction"
           value={freshness.newestTransaction ? shortDate(freshness.newestTransaction) : "none"}
         />
-        <Row label="New data arrived" value={ago(freshness.transactionsAt)} />
+        <Row label="New data arrived" value={ago(freshness.transactionsAt, now)} />
+        <Row label="This page read" value={ago(dashboard.readAt, now)} />
 
         {queued ? (
           <div class="text-info mt-2">
             Queued. Nothing new appears until Chase posts it, which takes a day or two.
+          </div>
+        ) : null}
+        {action === "reloaded" ? (
+          <div class="text-info mt-2">
+            Reloaded from Lunch Money. The banks were asked recently, so there is nothing new to ask
+            them for yet.
           </div>
         ) : null}
 

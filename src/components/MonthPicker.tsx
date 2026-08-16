@@ -52,9 +52,14 @@ export const MonthPicker = ({ month, latest, filter }: MonthPickerProps) => {
       >
         {monthLabel(month)}
       </button>
-      <form class="dropdown-menu dropdown-menu-end p-3" method="get" action="/">
+      <form
+        class="dropdown-menu dropdown-menu-end month-menu p-2"
+        method="get"
+        action="/"
+        data-autosubmit
+      >
         {filter ? <input type="hidden" name="filter" value={filter} /> : null}
-        <div class="d-flex gap-2">
+        <div class="d-grid gap-2">
           <select class="form-select form-select-sm" name="m" aria-label="Month">
             {MONTHS.map((name, i) => (
               <option value={String(i + 1).padStart(2, "0")} selected={i + 1 === Number(m)}>
@@ -71,13 +76,17 @@ export const MonthPicker = ({ month, latest, filter }: MonthPickerProps) => {
           </select>
         </div>
         {/*
-          A month outside the range is clamped rather than refused — the year
-          select cannot know which months of the current year exist yet, and an
-          error page is a poor answer to "December, please" in August.
+          No Show button: changing either select submits, which also closes the
+          dropdown, because the page navigates. A month outside the range is
+          clamped rather than refused — the year select cannot know which months
+          of the current year exist yet, and an error page is a poor answer to
+          "December, please" in August.
         */}
-        <button type="submit" class="btn btn-sm btn-primary w-100 mt-3">
-          Show
-        </button>
+        <noscript>
+          <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">
+            Show
+          </button>
+        </noscript>
       </form>
     </div>
   )

@@ -22,11 +22,13 @@ export interface AppOptions {
   config: Config
   /** Overridden in tests so "today" is not the wall clock. */
   today?: () => IsoDate
+  /** Likewise for the instant, which is what staleness is measured against. */
+  clock?: () => Date
 }
 
-export function createApp({ client, config, today }: AppOptions) {
+export function createApp({ client, config, today, clock }: AppOptions) {
   const app = new Hono<AppEnv>()
-  const service = new DashboardService(client, config, new Cache(config.cacheTtlSeconds))
+  const service = new DashboardService(client, config, new Cache(config.cacheTtlSeconds), clock)
   const now = today ?? (() => todayIn(config.timezone))
 
   app.get("/healthz", (c) => c.text("ok"))

@@ -123,16 +123,23 @@ dashboardRoutes.get("/sync", async (c) => {
 })
 
 /**
- * Manual refresh. Forces past the staleness check, but not past the cooldown —
- * Lunch Money asks that this endpoint be used sparingly, and a button invites
- * exactly the impatient clicking it warns about.
+ * Manual refresh. Always re-reads Lunch Money; asks Plaid only if the cooldown
+ * has passed. Lunch Money asks that the Plaid endpoint be used sparingly, and a
+ * button invites exactly the impatient clicking it warns about — but the click
+ * is never wasted, because the cache re-read is the half that has something to
+ * show for it.
  */
 dashboardRoutes.post("/refresh", async (c) => {
-  const view = viewOf(c, c.var.today())
-  const before = await c.var.service.build(view.asOf)
-  const queued = await c.var.service.maybeRefresh(before.freshness, true)
-  const after = await c.var.service.build(c.var.today())
-  return c.html(<Sync dashboard={after} queued={queued} />)
+  // Drop the cache first, unconditionally. Asking Plaid is rate-limited and
+  // often pointless; re-reading Lunch Money is neither, and it is what surfaces
+  // a tag the other person applied from their phone two minutes ago.
+  //
+  // Built as of today rather than the month on screen: freshness is a property
+  // of the data, not of the month being looked at.
+  c.var.service.invalidate()
+  const dashboard = await c.var.service.build(c.var.today())
+  const queued = await c.var.service.maybeRefresh(dashboard.freshness, true)
+  return c.html(<Sync dashboard={dashboard} state={queued ? "queued" : "reloaded"} />)
 })
 
 /** HTMX partial: swap the transaction list when a filter is clicked. */

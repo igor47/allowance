@@ -1,7 +1,7 @@
 import { createApp } from "../app"
 import { config } from "../config"
 import { FakeLunchMoneyClient } from "./fake-client"
-import { FIXTURE_TODAY } from "./fixtures"
+import { FIXTURE_NOW, FIXTURE_TODAY } from "./fixtures"
 
 /** Pinned so a stray env var cannot move the numbers the tests assert on. */
 export const TEST_CONFIG = {
@@ -17,6 +17,7 @@ export function useTestApp(client = new FakeLunchMoneyClient(), cacheTtlSeconds 
     client,
     config: { ...TEST_CONFIG, cacheTtlSeconds },
     today: () => FIXTURE_TODAY,
+    clock: () => FIXTURE_NOW,
   })
 
   const get = (path: string) => app.request(path)

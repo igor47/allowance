@@ -41,6 +41,13 @@ export interface Dashboard {
   needsReview: number
   unknownAccounts: string[]
   freshness: Freshness
+  /** When we last read this from Lunch Money, as opposed to from memory. */
+  readAt: Date | null
+  /**
+   * The instant this was built. Everything that renders an age measures against
+   * it, so the clock badge and the times beneath it cannot disagree.
+   */
+  now: Date
 }
 
 /** Chase posts a charge up to four days after it is authorized. */
@@ -52,7 +59,9 @@ export class DashboardService {
   constructor(
     private readonly client: LunchMoneyClient,
     private readonly config: Config,
-    private readonly cache: Cache
+    private readonly cache: Cache,
+    /** Injected so tests do not depend on the wall clock. */
+    private readonly now: () => Date = () => new Date()
   ) {}
 
   /** Force the next build to re-read from the API. */
@@ -147,23 +156,31 @@ export class DashboardService {
         transactions.reduce<string | null>(
           (max, t) => (max === null || t.date > max ? t.date : max),
           null
-        )
+        ),
+        this.now()
       ),
+      now: this.now(),
+      readAt: (() => {
+        const at = this.cache.storedAt("txns:")
+        return at === null ? null : new Date(at)
+      })(),
     }
   }
 
   /**
    * Ask Lunch Money to pull from Plaid, if it has not lately.
    *
-   * Their API allows one fetch a minute but asks for restraint, so this is
-   * gated twice: on the accounts' own last_fetch, and on an in-process
-   * cooldown so two people loading the page at once queue one job, not two.
+   * Their API allows one fetch a minute — sooner returns 425 — but asks for
+   * restraint, so this is gated twice: on the accounts' own last_fetch, and on
+   * an in-process cooldown so two people loading the page at once queue one
+   * job, not two. The cooldown is deliberately far longer than the API's
+   * minute: Plaid will not have anything new within it either.
    * The pull is a background job on their side - nothing is fresher when this
    * returns, it is the *next* load that benefits.
    */
   async maybeRefresh(current: Freshness, force = false): Promise<boolean> {
     if (!force && !current.shouldRefresh) return false
-    const now = Date.now()
+    const now = this.now().getTime()
     if (now - this.lastTriggerAt < this.config.refreshAfterMinutes * 60_000) return false
     this.lastTriggerAt = now
     try {

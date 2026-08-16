@@ -27,6 +27,8 @@ export interface Freshness {
   lastFetchAt: Date | null
   /** Whole minutes since the last fetch, or null if never. */
   minutesSinceFetch: number | null
+  /** Whole minutes since new transactions last arrived, or null if never. */
+  minutesSinceImport: number | null
   /** Worth queueing another pull. */
   shouldRefresh: boolean
 }
@@ -49,8 +51,9 @@ export function freshness(
   const transactionsAt = newest(accounts.map((a) => a.last_import))
   const balancesAt = newest(accounts.map((a) => a.balance_last_update))
   const lastFetchAt = newest(accounts.map((a) => a.last_fetch))
-  const minutesSinceFetch =
-    lastFetchAt === null ? null : Math.floor((now.getTime() - lastFetchAt.getTime()) / 60_000)
+  const since = (then: Date | null) =>
+    then === null ? null : Math.floor((now.getTime() - then.getTime()) / 60_000)
+  const minutesSinceFetch = since(lastFetchAt)
 
   return {
     transactionsAt,
@@ -58,6 +61,7 @@ export function freshness(
     balancesAt,
     lastFetchAt,
     minutesSinceFetch,
+    minutesSinceImport: since(transactionsAt),
     shouldRefresh: minutesSinceFetch === null || minutesSinceFetch >= refreshAfterMinutes,
   }
 }
@@ -65,19 +69,25 @@ export function freshness(
 /**
  * Three states, because a clock face in a navbar can only say so much.
  *
- * `aging` starts where the automatic refresh would have fired: past that point
- * nobody has asked Plaid for anything recently. `stale` is a day, which is
- * roughly the interval at which transactions actually land — beyond it, the
- * numbers are probably missing a day of spending rather than an hour of it.
+ * Keyed on when data last *arrived*, not when Lunch Money last asked. Imports
+ * are webhook-driven — Lunch Money pulls when Plaid says there is something to
+ * pull — so an old `last_fetch` describes a quiet bank rather than a broken
+ * sync, and a clock keyed on it would show red through every quiet weekend.
+ *
+ * The thresholds are in days because that is the unit the banks work in: one
+ * day is normal, three is a long weekend, more than that and something is
+ * wrong. It is also independent of which month is on screen, which the newest
+ * transaction *in view* is not.
  */
 export type Staleness = "fresh" | "aging" | "stale"
 
-const STALE_AFTER_MINUTES = 24 * 60
+const AGING_AFTER_MINUTES = 24 * 60
+const STALE_AFTER_MINUTES = 72 * 60
 
 export function staleness(f: Freshness): Staleness {
-  if (f.minutesSinceFetch === null) return "stale"
-  if (!f.shouldRefresh) return "fresh"
-  return f.minutesSinceFetch < STALE_AFTER_MINUTES ? "aging" : "stale"
+  if (f.minutesSinceImport === null) return "stale"
+  if (f.minutesSinceImport < AGING_AFTER_MINUTES) return "fresh"
+  return f.minutesSinceImport < STALE_AFTER_MINUTES ? "aging" : "stale"
 }
 
 /** "19h ago", "4m ago" — precision nobody needs is precision nobody reads. */

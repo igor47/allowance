@@ -95,9 +95,16 @@ export const Sync = ({ dashboard, state: action = "idle" }: SyncProps) => {
         `show` is rendered server-side after a refresh so the queued message is
         visible without a second click — the swap that delivers it also closes
         whatever the click had opened.
+
+        `data-bs-popper="static"` has to come with it. Bootstrap scopes the
+        right-alignment of `dropdown-menu-end` to `[data-bs-popper]`, which only
+        exists when Popper opened the menu; without it a server-rendered menu
+        falls back to `left: 0`, opens rightwards from a button already at the
+        right edge, and hangs its values off the side of the window.
       */}
       <div
         class={`dropdown-menu dropdown-menu-end sync-menu p-3 small ${action === "idle" ? "" : "show"}`}
+        {...(action === "idle" ? {} : { "data-bs-popper": "static" })}
       >
         <div class={`fw-semibold mb-2 ${color}`}>{word}</div>
         <Row label="Banks polled" value={ago(freshness.lastFetchAt, now)} />

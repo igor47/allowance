@@ -157,6 +157,24 @@ describe("sync", () => {
     expect(page.querySelector("#sync")?.getAttribute("hx-get")).toBe("/sync")
   })
 
+  test("the server-rendered open menu carries a static popper marker", async () => {
+    // Bootstrap only right-aligns `dropdown-menu-end` under [data-bs-popper],
+    // which Popper adds when *it* opens the menu. Rendering `show` from the
+    // server without it drops the menu to left:0 — off the right of the window,
+    // taking every value with it.
+    const page = await dom(await useTestApp().post("/refresh"))
+    const menu = page.querySelector("#sync .dropdown-menu")
+    expect(menu?.getAttribute("class")).toContain("show")
+    expect(menu?.getAttribute("data-bs-popper")).toBe("static")
+  })
+
+  test("the closed menu leaves positioning to popper", async () => {
+    const page = await dom(await useTestApp().get("/"))
+    const menu = page.querySelector("#sync .dropdown-menu")
+    expect(menu?.getAttribute("class")).not.toContain("show")
+    expect(menu?.hasAttribute("data-bs-popper")).toBe(false)
+  })
+
   test("a second refresh inside the cooldown does not hit the API again", async () => {
     const { client, post } = useTestApp()
     await post("/refresh")

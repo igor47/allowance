@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="allowance">
+  <title>allowance</title>
+  <!--
+    The tab-sized cut. The dashed target line is dropped and the bars widened:
+    at 16 pixels a 2.5px dash renders as a smudge, and three falling bars carry
+    the same meaning with none of the mush.
+  -->
+  <rect width="64" height="64" rx="14" fill="#212529"/>
+  <rect x="8" y="16" width="13" height="36" rx="3" fill="#dc3545"/>
+  <rect x="25.5" y="29" width="13" height="23" rx="3" fill="#198754"/>
+  <rect x="43" y="39" width="13" height="13" rx="3" fill="#198754"/>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="allowance">
+  <title>allowance</title>
+  <!--
+    Three periods of spending against the daily target: over it in red, then
+    under, then well under. The bars fall left to right, so the story survives
+    without colour — which matters at 16px and for a red-green colourblind
+    reader alike. Colours are the app's own success/danger, the same pair the
+    dashboard chart uses.
+  -->
+  <rect width="64" height="64" rx="14" fill="#212529"/>
+  <g>
+    <rect x="10" y="18" width="10" height="34" rx="2.5" fill="#dc3545"/>
+    <rect x="27" y="30" width="10" height="22" rx="2.5" fill="#198754"/>
+    <rect x="44" y="40" width="10" height="12" rx="2.5" fill="#198754"/>
+  </g>
+  <!-- The daily target. The red bar is the one that breaks it. -->
+  <line x1="6" y1="26" x2="58" y2="26" stroke="#adb5bd" stroke-width="2.5"
+        stroke-linecap="round" stroke-dasharray="6 4" opacity="0.85"/>
+</svg>

@@ -373,13 +373,14 @@ describe("budget page", () => {
 
 describe("phone layout", () => {
   // The page must never scroll sideways: a 390px screen fits the navbar and
-  // the filters only because the brand hides and the filters wrap, and wide
-  // tables scroll inside their own box rather than dragging the page with them.
-  test("the brand hides on small screens, where the nav link says the same word", async () => {
+  // the filters only because the brand is a 28px mark rather than a word and
+  // the filters wrap, and wide tables scroll inside their own box rather than
+  // dragging the page with them.
+  test("the brand is the icon, which fits at every width", async () => {
     const page = await dom(await useTestApp().get("/"))
-    expect(page.querySelector(".navbar-brand")?.getAttribute("class")).toContain(
-      "d-none d-sm-inline"
-    )
+    const brand = page.querySelector(".navbar-brand")
+    expect(brand?.getAttribute("class")).not.toContain("d-none")
+    expect(brand?.querySelector("img")?.getAttribute("src")).toBe("/static/icon.svg")
   })
 
   test("the filter bar wraps instead of running off the edge", async () => {

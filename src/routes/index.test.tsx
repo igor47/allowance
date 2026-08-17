@@ -404,3 +404,35 @@ describe("phone layout", () => {
     expect(queued?.getAttribute("class")).not.toContain("sync-row")
   })
 })
+
+describe("access log", () => {
+  test("says who asked for what, and how it went", async () => {
+    const { get, logs } = useTestApp()
+    await get("/budget?month=2026-07", { headers: { "X-authentik-username": "igor47" } })
+
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatch(
+      /^\d{4}-\d{2}-\d{2}T[\d:.]+Z GET \/budget\?month=2026-07 200 \d+ms user=igor47$/
+    )
+  })
+
+  test("marks the anonymous case, since that is the forward-auth failure", async () => {
+    // A blank username looks like an ordinary page in the browser and only
+    // shows up later, as a tag filed under nobody. In the log it is visible.
+    const { get, logs } = useTestApp()
+    await get("/")
+    expect(logs[0]).toContain("user=-")
+  })
+
+  test("logs the request that failed, not just the stack", async () => {
+    const client = new FakeLunchMoneyClient()
+    client.transactions = () => {
+      throw new Error("lunch money is down")
+    }
+    const { get, logs } = useTestApp(client)
+
+    expect((await get("/")).status).toBe(500)
+    expect(logs.some((l) => l.includes("GET / failed: Error: lunch money is down"))).toBe(true)
+    expect(logs.some((l) => /GET \/ 500 \d+ms/.test(l))).toBe(true)
+  })
+})

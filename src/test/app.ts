@@ -13,15 +13,18 @@ export const TEST_CONFIG = {
 }
 
 export function useTestApp(client = new FakeLunchMoneyClient(), cacheTtlSeconds = 0) {
+  /** Collected rather than printed, so a test can assert on what was logged. */
+  const logs: string[] = []
   const app = createApp({
     client,
     config: { ...TEST_CONFIG, cacheTtlSeconds },
     today: () => FIXTURE_TODAY,
     clock: () => FIXTURE_NOW,
+    log: (line) => logs.push(line),
   })
 
-  const get = (path: string) => app.request(path)
-  const post = (path: string) => app.request(path, { method: "POST" })
+  const get = (path: string, init?: RequestInit) => app.request(path, init)
+  const post = (path: string, init?: RequestInit) => app.request(path, { method: "POST", ...init })
 
-  return { app, client, get, post }
+  return { app, client, get, post, logs }
 }

@@ -1,9 +1,34 @@
 import { describe, expect, test } from "bun:test"
 import { parseHTML } from "linkedom"
+import type { LmTransaction } from "../lunchmoney/types"
 import { useTestApp } from "../test/app"
 import { FakeLunchMoneyClient } from "../test/fake-client"
+import { fixtureTransactions } from "../test/fixtures"
 
 const dom = async (response: Response) => parseHTML(await response.text()).document
+
+/**
+ * The recorded data with one row's tags stripped, plus a client serving it.
+ *
+ * August gets reviewed: 101 of its 102 Chase charges carry a tag by now. A test
+ * that needs an unreviewed row therefore has to make one rather than hope a
+ * survivor is still there — untagging a real charge keeps the numbers real
+ * while pinning the precondition the test actually depends on.
+ */
+const withUnreviewed = (match: (t: LmTransaction) => boolean) => {
+  const target = fixtureTransactions.find(match)
+  if (!target) throw new Error("no fixture row matches")
+  const client = new FakeLunchMoneyClient(
+    fixtureTransactions.map((t) => (t.id === target.id ? { ...t, tags: [] } : t))
+  )
+  return { client, target: { ...target, tags: [] } }
+}
+
+const anAugustCharge = (t: LmTransaction) =>
+  t.account_display_name === "Card" &&
+  t.date >= "2026-08-01" &&
+  t.date <= "2026-08-14" &&
+  Number(t.amount) > 50
 
 describe("dashboard", () => {
   test("renders the allowance from recorded data", async () => {
@@ -13,10 +38,10 @@ describe("dashboard", () => {
 
     const page = await dom(response)
     const hero = page.querySelector(".hero-number")?.textContent?.trim()
-    // $200/day over 14 days against $3,360 of real August spend — which
+    // $200/day over 14 days against $3,691 of real August spend — which
     // includes the $196.15 hotel deposit and $6.87 coffee that Lunch Money had
     // filed as transfers and excluded.
-    expect(hero).toBe("-$560")
+    expect(hero).toBe("-$891")
   })
 
   test("shows cash, the closed statement, and what is accruing", async () => {
@@ -28,7 +53,7 @@ describe("dashboard", () => {
   })
 
   test("defaults to the review queue", async () => {
-    const page = await dom(await useTestApp().get("/"))
+    const page = await dom(await useTestApp(withUnreviewed(anAugustCharge).client).get("/"))
     const active = page.querySelector("#txn-list .btn-secondary")?.textContent
     expect(active).toContain("Needs review")
     expect(page.querySelectorAll("tr.unreviewed").length).toBeGreaterThan(0)
@@ -42,7 +67,7 @@ describe("dashboard", () => {
     // filed as "Payment, Transfer" — because the bank billed them regardless.
     const page = await dom(await useTestApp().get("/"))
     const due = page.querySelectorAll("#boxes .stat-number")[1]?.textContent
-    expect(due).toBe("$15,130")
+    expect(due).toBe("$14,997")
   })
 
   test("filters narrow the feed", async () => {
@@ -61,16 +86,7 @@ describe("dashboard", () => {
 })
 
 describe("tagging", () => {
-  const findUnreviewed = async () => {
-    const client = new FakeLunchMoneyClient()
-    const all = await client.transactions("2026-08-01", "2026-08-14")
-    const target = all.find(
-      (t) =>
-        t.account_display_name === "Card" && t.tags.length === 0 && Number(t.amount) > 50
-    )
-    if (!target) throw new Error("fixture has no untagged Chase spend")
-    return { client, target }
-  }
+  const findUnreviewed = async () => withUnreviewed(anAugustCharge)
 
   test("tagging recurring removes the charge from the allowance", async () => {
     const { client, target } = await findUnreviewed()
@@ -185,13 +201,7 @@ describe("sync", () => {
 
 describe("caching", () => {
   test("tagging patches the cache instead of re-reading the window", async () => {
-    const client = new FakeLunchMoneyClient()
-    const all = await client.transactions("2026-08-01", "2026-08-14")
-    const target = all.find(
-      (t) =>
-        t.account_display_name === "Card" && t.tags.length === 0 && !t.exclude_from_totals
-    )
-    if (!target) throw new Error("fixture has no untagged Chase spend")
+    const { client, target } = withUnreviewed((t) => anAugustCharge(t) && !t.exclude_from_totals)
 
     // A cache that actually caches, so a tag write must not need a re-read.
     const app = useTestApp(client, 300)
@@ -209,8 +219,10 @@ describe("caching", () => {
 })
 
 describe("deposits", () => {
-  test("the credits filter surfaces refunds and deposits to tag", async () => {
-    const page = await dom(await useTestApp().get("/?filter=credits"))
+  test("the deposits filter surfaces refunds and deposits to tag", async () => {
+    // `credits` is not a filter and never was: it fell through to the review
+    // queue, which passed only for as long as that queue happened to be full.
+    const page = await dom(await useTestApp().get("/?filter=deposits"))
     const rows = page.querySelectorAll("tbody tr")
     expect(rows.length).toBeGreaterThan(0)
     // Every row is money coming back, and every one can be tagged.
@@ -242,13 +254,7 @@ describe("deposits", () => {
 
 describe("row stability", () => {
   test("a row keeps its shape whether or not it is tagged", async () => {
-    const client = new FakeLunchMoneyClient()
-    const all = await client.transactions("2026-08-01", "2026-08-14")
-    const target = all.find(
-      (t) =>
-        t.account_display_name === "Card" && t.tags.length === 0 && !t.exclude_from_totals
-    )
-    if (!target) throw new Error("fixture has no untagged Chase spend")
+    const { client, target } = withUnreviewed((t) => anAugustCharge(t) && !t.exclude_from_totals)
 
     const app = useTestApp(client, 300)
     const shape = (doc: Document) => {
@@ -282,7 +288,10 @@ describe("the month chart", () => {
       n.getAttribute("data-bs-title")
     )
     expect(tips[7]).toBe("Sat, Aug 8 · $677 spent")
-    expect(tips[13]).toBe("Fri, Aug 14 · $0 spent so far")
+    // The 14th is the day the fixture was recorded on, and charges kept posting
+    // to it after the recording — hence a figure rather than the $0 it had
+    // when the day was still half-written.
+    expect(tips[13]).toBe("Fri, Aug 14 · $160 spent so far")
     expect(tips[30]).toBe("Mon, Aug 31 · not yet")
   })
 
@@ -302,7 +311,10 @@ describe("month picker", () => {
     const page = await dom(await useTestApp().get("/?month=2026-07"))
     expect(page.querySelector(".dropdown-toggle")?.textContent?.trim()).toBe("July 2026")
     // 252 real July transactions in the fixture, against 31 days of target.
-    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("-$3,308")
+    // Was -$3,308 before the wallet was given a policy: the $222 sent back to
+    // Nico on the 12th is a loan settling, and it counts until it is tagged
+    // `irregular`, exactly as an untagged card charge would.
+    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("-$3,530")
     expect(page.querySelectorAll(".month-chart-hover > div")).toHaveLength(31)
   })
 
@@ -340,15 +352,19 @@ describe("month picker", () => {
 describe("budget page", () => {
   test("derives a daily allowance from income minus commitments", async () => {
     const page = await dom(await useTestApp().get("/budget"))
-    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("$197")
+    // A rental property arrived in the plan since: $1,717/month of rent in,
+    // $1,572 of mortgage out, alongside $975 of therapy and $449 of new
+    // subscriptions — which is the whole of the drop from the $197 this used
+    // to derive.
+    expect(page.querySelector(".hero-number")?.textContent?.trim()).toBe("$171")
     const summary = page.querySelector("#budget")?.textContent ?? ""
-    expect(summary).toContain("$15,413") // income
-    expect(summary).toContain("$9,293") // committed
+    expect(summary).toContain("$17,130") // income
+    expect(summary).toContain("$11,840") // committed
   })
 
   test("says how much is committed on accounts with no transaction feed", async () => {
     const page = await dom(await useTestApp().get("/budget"))
-    expect(page.querySelector("#budget")?.textContent).toContain("$744 untracked")
+    expect(page.querySelector("#budget")?.textContent).toContain("$1,193 untracked")
   })
 
   test("both pages are reachable from the navbar", async () => {
@@ -389,7 +405,7 @@ describe("phone layout", () => {
   })
 
   test("wide tables scroll inside their own container", async () => {
-    const home = await dom(await useTestApp().get("/"))
+    const home = await dom(await useTestApp(withUnreviewed(anAugustCharge).client).get("/"))
     expect(home.querySelector(".table-responsive .txn-table")).not.toBeNull()
     const budget = await dom(await useTestApp().get("/budget"))
     expect(budget.querySelectorAll(".table-responsive table")).toHaveLength(2)

@@ -44,6 +44,7 @@ export type AccountPolicy =
 
 export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
   "Card": "spending",
+  "Wallet": "spending",
   "Checking": "fixed",
   "Savings": "fixed",
   "Old Card": "ignore",
@@ -114,6 +115,23 @@ const IGNORED = (reason: string, amount: number): Classification => ({
 const INTERNAL_TRANSFER = /redemption from core|purchase into core|transferred from vs|acctverify/i
 
 /**
+ * Topping up the wallet, or emptying it back into the bank.
+ *
+ * Venmo reports only its own person-to-person half — every row on that account
+ * is named after a person, and the funding never appears there at all. It shows
+ * up on the bank side instead, with a payee of exactly "Venmo": no name, no
+ * memo, which is precisely what separates it from the wallet's own rows. Across
+ * three months the split is total — 9 bank rows say "Venmo" and none of the 14
+ * wallet rows do.
+ *
+ * Both directions are internal. The spend is counted where it was spent, so
+ * moving the money there must not count again, and moving it back is not a
+ * refund. This also swallows the ±$0.01 and ±$0.22 pairs Venmo used to verify
+ * the account.
+ */
+const WALLET_TRANSFER = /^venmo$/i
+
+/**
  * Card payments: the bill being settled, on either side of the transaction.
  *
  * Deliberately NOT keyed on `is_income` or an "Income" category. Lunch Money
@@ -128,6 +146,11 @@ export function isInternalTransfer(txn: LmTransaction): boolean {
   return INTERNAL_TRANSFER.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
 }
 
+/** Money moving between a bank account and a wallet like Venmo. Never a spend. */
+export function isWalletTransfer(txn: LmTransaction): boolean {
+  return WALLET_TRANSFER.test((txn.payee ?? "").trim())
+}
+
 /** A payment against the card balance, as opposed to anything bought with it. */
 export function isCardPayment(txn: LmTransaction): boolean {
   return CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
@@ -137,6 +160,7 @@ export function looksLikeSettlement(txn: LmTransaction): boolean {
   const name = `${txn.payee ?? ""} ${txn.original_name ?? ""}`
   if (CARD_PAYMENT.test(name)) return true
   if (INTERNAL_TRANSFER.test(name)) return true
+  if (isWalletTransfer(txn)) return true
   return !!txn.category_name && /payment|transfer/i.test(txn.category_name)
 }
 
@@ -184,6 +208,7 @@ export function classify(txn: LmTransaction): Classification {
     }
 
   if (isInternalTransfer(txn)) return IGNORED("internal account sweep", amount)
+  if (isWalletTransfer(txn)) return IGNORED("moving money in or out of the wallet", amount)
   if (amount === 0) return IGNORED("zero amount", amount)
 
   if (policy === "fixed") {
@@ -211,7 +236,7 @@ export function classify(txn: LmTransaction): Classification {
     }
   }
 
-  // The discretionary card.
+  // A spending account: the discretionary card, and the wallet.
   //
   // Categories here are good — 697 of 701 charges over three months carried a
   // real merchant category and none were uncategorised. But roughly one a
@@ -241,7 +266,7 @@ export function classify(txn: LmTransaction): Classification {
     amount,
     reason: txn.exclude_from_totals
       ? `counted despite Lunch Money excluding it (${txn.category_name ?? "no category"})`
-      : "untagged on the discretionary card",
+      : `untagged on ${account}`,
   }
 }
 

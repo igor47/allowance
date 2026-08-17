@@ -105,20 +105,31 @@ describe("the real plan", () => {
   const view = budgetView(fixtureRecurring, "2026-08-16")
 
   test("income is the fortnightly salary, monthlyised", () => {
-    expect(view.income).toHaveLength(1)
-    expect(Math.round(view.totals.income)).toBe(15_413)
+    // The salary arrives twice a month and is spread across it — $2,100.00 an
+    // occurrence, $15,413 a month, which is the calculation being pinned here.
+    const payroll = view.income.find((i) => i.payee === "SERVICECO MEPAYROLL")
+    expect(Math.round(payroll?.monthly ?? 0)).toBe(15_413)
+    // A second, manually-entered income of $1,717 against Chase joined it.
+    expect(view.income).toHaveLength(2)
+    expect(Math.round(view.totals.income)).toBe(17_130)
   })
 
   test("commitments include money that never appears as a transaction", () => {
-    // 24 subscriptions sit on the manually-managed card; their only trace in
+    // 26 subscriptions sit on the manually-managed card; their only trace in
     // the transaction data is the autopay, which is excluded as a transfer.
-    expect(Math.round(view.totals.untracked)).toBe(744)
-    expect(view.commitments.filter((c) => !c.tracked)).toHaveLength(24)
+    expect(Math.round(view.totals.untracked)).toBe(1_193)
+    expect(view.commitments.filter((c) => !c.tracked)).toHaveLength(26)
   })
 
   test("the derived daily target lands near the one in use", () => {
     expect(view.days).toBe(31)
-    expect(Math.round(view.totals.dailyTarget)).toBe(197)
+    // Was $197. The drop is entirely new recurring items, and a rental
+    // property is most of it: $900.00/month of "Nest Mortgage" out against
+    // $1,717 of "Nest Rent" in, plus $975 of therapy and $449 of
+    // subscriptions. A property that nets +$145 a month still costs $50 a day
+    // of allowance, because the mortgage is committed and the rent is income
+    // spread across everything.
+    expect(Math.round(view.totals.dailyTarget)).toBe(171)
   })
 
   test("payees are decoded for display", () => {

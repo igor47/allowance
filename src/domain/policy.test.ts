@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
+import { accountNameOf } from "../lunchmoney/types"
 import { txn } from "../test/factories"
 import { fixtureTransactions } from "../test/fixtures"
-import { classify, looksLikeSettlement, unknownAccounts } from "./policy"
+import {
+  CLASSIFYING_TAGS,
+  classify,
+  looksLikeSettlement,
+  policyFor,
+  unknownAccounts,
+} from "./policy"
 
 describe("account policy", () => {
   test("untagged spend on the discretionary card counts", () => {
@@ -229,8 +236,14 @@ describe("against recorded data", () => {
   })
 
   test("nothing from a fixed-cost account slips in untagged", () => {
+    // Tagged rows are the point of the tag, not a leak: an August
+    // reimbursement on Checking carries `spending` deliberately, to credit
+    // the allowance back for the purchase it repays. Only silence counts here.
     const leaked = august.filter(
-      (t) => classify(t).counts && t.account_display_name !== "Card"
+      (t) =>
+        classify(t).counts &&
+        policyFor(accountNameOf(t)) === "fixed" &&
+        !t.tags.some((g) => CLASSIFYING_TAGS.includes(g.name.toLowerCase()))
     )
     expect(leaked).toEqual([])
   })
@@ -257,5 +270,65 @@ describe("Lunch Money's exclude flag on the card", () => {
   test("the actual card payment is still excluded", () => {
     const payment = excluded({ payee: "AUTOMATIC PAYMENT - THANK", amount: "-4200.00" })
     expect(classify(payment).counts).toBe(false)
+  })
+})
+
+describe("the wallet", () => {
+  const wallet = (over = {}) =>
+    txn({
+      account_display_name: "Wallet",
+      plaid_account_display_name: "Wallet",
+      institution_name: "Venmo - Personal",
+      category_name: "🔄 Payment, Transfer",
+      exclude_from_totals: true,
+      ...over,
+    })
+
+  test("paying a person counts, the way a card charge does", () => {
+    const dinner = wallet({ payee: 'Karina Solomonik "🏖️🛖🌊🐩"', amount: "600.00" })
+    expect(classify(dinner).counts).toBe(true)
+    expect(classify(dinner).bucket).toBe("spending")
+  })
+
+  test("funding the wallet is a transfer, on the bank side where it appears", () => {
+    // Venmo reports only its own person-to-person half, so the top-up shows up
+    // once, on the bank statement, as a payee of exactly "Venmo".
+    const topUp = txn({ account_display_name: "Savings", payee: "Venmo", amount: "150.00" })
+    expect(classify(topUp).counts).toBe(false)
+    expect(classify(topUp).reason).toBe("moving money in or out of the wallet")
+
+    const cashOut = txn({
+      account_display_name: "Checking",
+      payee: "Venmo",
+      amount: "-150.00",
+    })
+    expect(classify(cashOut).counts).toBe(false)
+  })
+
+  test("a person's name is never mistaken for the wallet itself", () => {
+    // Nine bank rows say "Venmo" and none of the fourteen wallet rows do, which
+    // is the whole basis of the rule above.
+    const fromAFriend = wallet({ payee: 'Lee Granas "Food!"', amount: "-20.00" })
+    expect(classify(fromAFriend).counts).toBe(true)
+  })
+
+  test("a loan repaid is neither spend nor refund once tagged", () => {
+    const lent = wallet({
+      payee: 'Nico Schafgans "overpayment"',
+      amount: "222.00",
+      tags: ["irregular"],
+    })
+    const repaid = wallet({
+      payee: 'Nico Schafgans "Loan repayment may and Jun"',
+      amount: "-222.00",
+      tags: ["irregular"],
+    })
+    expect(classify(lent).counts).toBe(false)
+    expect(classify(repaid).counts).toBe(false)
+    expect(classify(repaid).bucket).toBe("irregular")
+  })
+
+  test("the wallet is no longer an unknown account", () => {
+    expect(unknownAccounts(fixtureTransactions)).toEqual([])
   })
 })

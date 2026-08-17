@@ -7,11 +7,11 @@
  * classified this yet", and it counts. Errors therefore make the number more
  * conservative, not less.
  *
- * On Fidelity the same rule is catastrophic: rent and the credit card autopay
- * leave from there untagged. Aug 1-13 reads $23,370 under a global
- * untagged-counts rule versus $3,157 for Chase alone. So Fidelity is opt-in —
- * only an explicit `spending` tag counts, which is how ATM cash withdrawals
- * make it into the number.
+ * On Checking the same rule is catastrophic: the $1,500.00 rent and the
+ * five-figure Chase autopay both leave from there untagged. Aug 1-13 reads
+ * $23,370 under a global untagged-counts rule versus $3,157 for Chase alone.
+ * So the bank accounts are opt-in — only an explicit `spending` tag counts,
+ * which is how ATM cash withdrawals make it into the number.
  */
 
 import { accountNameOf, type LmTransaction } from "../lunchmoney/types"
@@ -30,18 +30,22 @@ export const CLASSIFYING_TAGS: string[] = [TAG.recurring, TAG.irregular, TAG.spe
 /** Tags that attribute a transaction to a person. Orthogonal to the math. */
 export const PERSON_TAGS: string[] = [TAG.igor, TAG.serena]
 
+/**
+ * What an *untagged* transaction on this account means. A tag always wins;
+ * this is only the answer when nobody has said anything.
+ */
 export type AccountPolicy =
-  /** Untagged counts against the allowance. The discretionary card. */
-  | "default-in"
-  /** Untagged is assumed fixed. Only an explicit `spending` tag counts. */
-  | "default-out"
+  /** Discretionary by default: untagged counts against the allowance. */
+  | "spending"
+  /** Fixed by default: rent, autopay, transfers. Only a `spending` tag counts. */
+  | "fixed"
   /** Dormant or irrelevant. Never counts, never shown in the review queue. */
   | "ignore"
 
 export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
-  "Card": "default-in",
-  "Checking": "default-out",
-  "Savings": "default-out",
+  "Card": "spending",
+  "Checking": "fixed",
+  "Savings": "fixed",
   "Old Card": "ignore",
 }
 
@@ -50,7 +54,7 @@ export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
  * A newly linked account should not silently add five figures to the month;
  * `unknownAccounts()` surfaces them so the omission is visible instead.
  */
-export const UNKNOWN_ACCOUNT_POLICY: AccountPolicy = "default-out"
+export const UNKNOWN_ACCOUNT_POLICY: AccountPolicy = "fixed"
 
 export function policyFor(accountName: string): AccountPolicy {
   return ACCOUNT_POLICY[accountName] ?? UNKNOWN_ACCOUNT_POLICY
@@ -63,7 +67,7 @@ export type Bucket =
   | "recurring"
   /** Lumpy but not a daily choice — memory care, vet emergencies, dental. */
   | "irregular"
-  /** Nobody has said what this is; it sits on a default-out account. */
+  /** Nobody has said what this is; it sits on a `fixed` account. */
   | "unclassified"
   /**
    * Money arriving in a bank account: payroll, interest, a cheque, an expense
@@ -182,7 +186,7 @@ export function classify(txn: LmTransaction): Classification {
   if (isInternalTransfer(txn)) return IGNORED("internal account sweep", amount)
   if (amount === 0) return IGNORED("zero amount", amount)
 
-  if (policy === "default-out") {
+  if (policy === "fixed") {
     // `exclude_from_totals` is not consulted here: Fidelity's double entry sets
     // it on real deposits as well as their sweeps, so it hides the very
     // transactions a reimbursement needs.

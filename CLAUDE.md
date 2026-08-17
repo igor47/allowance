@@ -71,10 +71,12 @@ caller, and the current date is always an argument.
 ### The one rule that will bite you
 
 Inclusion is **per-account**, not global. On Card, untagged means
-discretionary and counts. On Fidelity, untagged means *fixed* — rent and the
-card autopay live there — and only an explicit `spending` tag counts. Applying
-the Chase rule globally overstates spend by an order of magnitude. See
-`ACCOUNT_POLICY` in `src/domain/policy.ts`.
+discretionary and counts. On the bank accounts, untagged means *fixed* — rent
+and the card autopay both leave from Checking — and only an explicit
+`spending` tag counts. Applying the Chase rule globally overstates spend by an
+order of magnitude. See `ACCOUNT_POLICY` in `src/domain/policy.ts`, whose values
+say what an account *is* (`spending`, `fixed`, `ignore`), not which way its
+default falls.
 
 ## Testing
 

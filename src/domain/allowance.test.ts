@@ -1,13 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import type { AllowanceConfig } from "../config"
-import { txn } from "../test/factories"
+import { aCharge, aRefund, TEST_CONFIG } from "../test/world"
 import { classifyAll, computeAllowance } from "./allowance"
+import { IGOR_PERSONAL } from "./policy"
 
-const CONFIG: AllowanceConfig = {
-  periodStart: "2026-08-01",
-  dailyTarget: 200,
-  rolloverCapDays: 14,
-}
+const CONFIG: AllowanceConfig = TEST_CONFIG.allowance
 
 const compute = (txns: Parameters<typeof classifyAll>[0], today: string) =>
   computeAllowance(classifyAll(txns), CONFIG, today)
@@ -22,13 +19,13 @@ describe("rolling balance", () => {
   })
 
   test("spending draws the balance down", () => {
-    const result = compute([txn({ date: "2026-08-02", amount: "500.00" })], "2026-08-03")
+    const result = compute([aCharge({ on: "2026-08-02", amount: 500 })], "2026-08-03")
     expect(result.spent).toBe(500)
     expect(result.balance).toBe(100)
   })
 
   test("overspend carries forward, uncapped and unforgiven", () => {
-    const result = compute([txn({ date: "2026-08-01", amount: "5000.00" })], "2026-08-03")
+    const result = compute([aCharge({ on: "2026-08-01", amount: 5000 })], "2026-08-03")
     expect(result.balance).toBe(-4400)
     expect(result.rows[0]?.balance).toBe(-4800)
   })
@@ -44,17 +41,14 @@ describe("rolling balance", () => {
     // Thirty quiet days would bank $6,000 uncapped, leaving $3,200 after a
     // $3,000 splurge on day 31. The cap holds the bank to $2,800, so the same
     // splurge lands at zero instead.
-    const result = compute([txn({ date: "2026-08-31", amount: "3000.00" })], "2026-08-31")
+    const result = compute([aCharge({ on: "2026-08-31", amount: 3000 })], "2026-08-31")
     expect(result.balance).toBe(0)
     expect(result.forfeited).toBe(3200)
   })
 
   test("transactions outside the period are ignored", () => {
     const result = compute(
-      [
-        txn({ date: "2026-07-31", amount: "999.00" }),
-        txn({ date: "2026-08-20", amount: "999.00" }),
-      ],
+      [aCharge({ on: "2026-07-31", amount: 999 }), aCharge({ on: "2026-08-20", amount: 999 })],
       "2026-08-02"
     )
     expect(result.spent).toBe(0)
@@ -63,10 +57,7 @@ describe("rolling balance", () => {
 
   test("a refund gives the money back on the day it lands", () => {
     const result = compute(
-      [
-        txn({ date: "2026-08-01", amount: "300.00" }),
-        txn({ date: "2026-08-02", amount: "-100.00" }),
-      ],
+      [aCharge({ on: "2026-08-01", amount: 300 }), aRefund({ on: "2026-08-02", amount: 100 })],
       "2026-08-02"
     )
     expect(result.spent).toBe(200)
@@ -77,8 +68,8 @@ describe("rolling balance", () => {
   test("fixed costs never touch the balance", () => {
     const result = compute(
       [
-        txn({ date: "2026-08-01", amount: "675.00", tags: ["recurring"] }),
-        txn({ date: "2026-08-01", amount: "1500.00", account_display_name: "Checking" }),
+        aCharge({ on: "2026-08-01", amount: 675, tags: ["recurring"] }),
+        aCharge({ on: "2026-08-01", amount: 5000, account: IGOR_PERSONAL }),
       ],
       "2026-08-01"
     )
@@ -90,7 +81,7 @@ describe("rolling balance", () => {
 describe("the period is the calendar month", () => {
   test("the balance starts from zero on the 1st", () => {
     // A blowout on the last day of August is not September's problem.
-    const result = compute([txn({ date: "2026-08-31", amount: "5000.00" })], "2026-09-02")
+    const result = compute([aCharge({ on: "2026-08-31", amount: 5000 })], "2026-09-02")
     expect(result.periodStart).toBe("2026-09-01")
     expect(result.days).toBe(2)
     expect(result.spent).toBe(0)
@@ -114,7 +105,7 @@ describe("the period is the calendar month", () => {
 
   test("a month before the configured start is still a whole month", () => {
     // Browsing history predates the app; those months are not empty.
-    const result = compute([txn({ date: "2026-07-20", amount: "50.00" })], "2026-07-31")
+    const result = compute([aCharge({ on: "2026-07-20", amount: 50 })], "2026-07-31")
     expect(result.periodStart).toBe("2026-07-01")
     expect(result.days).toBe(31)
     expect(result.spent).toBe(50)

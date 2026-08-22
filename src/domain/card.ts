@@ -9,20 +9,18 @@
  * Cycles are bucketed by *posted* date, not the Lunch Money date. Lunch Money
  * reports Plaid's authorized date — when the card was swiped — and Chase bills
  * on the date the charge posts, one or two days later. Using the posted date
- * matches the statement exactly: the 06/13-07/12 cycle sums to $4,200.00
- * against a statement reading Purchases $4,200.00, and the cycle before it
- * matches that statement's Previous Balance. Using the Lunch Money date is off
- * by a few hundred dollars a month.
+ * matches the statement exactly, validated once against a downloaded PDF.
+ * Using the Lunch Money date is off by a few hundred dollars a month.
  */
 
 import { postedDate } from "../lunchmoney/details"
 import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { IsoDate } from "./dates"
-import { isCardPayment } from "./policy"
+import { CHASE, isCardPayment } from "./policy"
 
 /** The card whose statement cycle drives the summary boxes. */
-export const STATEMENT_ACCOUNT = "Card"
+export const STATEMENT_ACCOUNT: string = CHASE
 
 export interface CycleTotal {
   charges: number

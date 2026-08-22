@@ -1,26 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import type { LmRecurringItem } from "../lunchmoney/types"
-import { fixtureRecurring } from "../test/fixtures"
+import { recurringItem as item } from "../test/factories"
+import { aWorld } from "../test/world"
 import { budgetView, decodeEntities, perMonth, stateOf } from "./budget"
-
-const item = (over: Partial<LmRecurringItem> = {}): LmRecurringItem => ({
-  id: 1,
-  payee: "Thing",
-  description: null,
-  amount: "10.0000",
-  currency: "usd",
-  cadence: "monthly",
-  granularity: "month",
-  quantity: 1,
-  billing_date: "2026-08-10",
-  category_id: null,
-  is_income: false,
-  plaid_account_id: 452114,
-  asset_id: null,
-  transactions_within_range: [],
-  missing_dates_within_range: [],
-  ...over,
-})
 
 describe("cadence to a monthly figure", () => {
   test("monthly is itself", () => {
@@ -78,11 +59,11 @@ describe("state", () => {
   })
 
   test("an item on an account with no feed is never overdue", () => {
-    // Venture 6396 is manually managed: no transaction can ever link, so
-    // flagging it would cry wolf every day of every month.
+    // A manually-managed card: no transaction can ever link, so flagging it
+    // would cry wolf every day of every month.
     const manual = item({
       plaid_account_id: null,
-      asset_id: 386913,
+      asset_id: 1,
       missing_dates_within_range: ["2026-08-01"],
     })
     expect(stateOf(manual, "2026-08-16")).toBe("untracked")
@@ -101,38 +82,55 @@ describe("payees arrive HTML-escaped", () => {
   })
 })
 
-describe("the real plan", () => {
-  const view = budgetView(fixtureRecurring, "2026-08-16")
+describe("the plan, totalled", () => {
+  /**
+   * A whole plan, small enough to check in your head: a fortnightly salary and
+   * a rent cheque in, a mortgage and two subscriptions out — one of them on a
+   * card Lunch Money cannot see.
+   */
+  const plan = aWorld({ today: "2026-08-16" })
+    .income({ payee: "Payroll", amount: 4_000, cadence: "twice a month" })
+    .income({ payee: "Rent Received", amount: 2_000 })
+    .subscription({ payee: "Mortgage", amount: 1_500 })
+    .subscription({ payee: "A Streaming Service", amount: 20, tracked: false })
+    .subscription({ payee: "A Gym", amount: 100, tracked: false })
 
-  test("income is the fortnightly salary, monthlyised", () => {
-    // The salary arrives twice a month and is spread across it — $2,100.00 an
-    // occurrence, $15,413 a month, which is the calculation being pinned here.
-    const payroll = view.income.find((i) => i.payee === "SERVICECO MEPAYROLL")
-    expect(Math.round(payroll?.monthly ?? 0)).toBe(15_413)
-    // A second, manually-entered income of $1,717 against Chase joined it.
-    expect(view.income).toHaveLength(2)
-    expect(Math.round(view.totals.income)).toBe(17_130)
+  const view = budgetView(plan.recurring, "2026-08-16")
+
+  test("a fortnightly salary is counted twice, not once", () => {
+    // The API reports (month, 1) for it, so only the cadence string says so —
+    // and counting it once would halve the household's income.
+    const payroll = view.income.find((i) => i.payee === "Payroll")
+    expect(payroll?.amount).toBe(4_000)
+    expect(payroll?.monthly).toBe(8_000)
+    expect(view.totals.income).toBe(10_000)
   })
 
   test("commitments include money that never appears as a transaction", () => {
-    // 26 subscriptions sit on the manually-managed card; their only trace in
-    // the transaction data is the autopay, which is excluded as a transfer.
-    expect(Math.round(view.totals.untracked)).toBe(1_193)
-    expect(view.commitments.filter((c) => !c.tracked)).toHaveLength(26)
+    // Subscriptions on a manually-managed card leave no trace in the
+    // transaction feed at all; without the plan that money is invisible.
+    expect(view.totals.committed).toBe(1_620)
+    expect(view.totals.untracked).toBe(120)
+    expect(view.commitments.filter((c) => !c.tracked)).toHaveLength(2)
   })
 
-  test("the derived daily target lands near the one in use", () => {
+  test("the daily target is what is left, spread across the month", () => {
     expect(view.days).toBe(31)
-    // Was $197. The drop is entirely new recurring items, and a rental
-    // property is most of it: $900.00/month of "Nest Mortgage" out against
-    // $1,717 of "Nest Rent" in, plus $975 of therapy and $449 of
-    // subscriptions. A property that nets +$145 a month still costs $50 a day
-    // of allowance, because the mortgage is committed and the rent is income
-    // spread across everything.
-    expect(Math.round(view.totals.dailyTarget)).toBe(171)
+    expect(view.totals.pool).toBe(8_380)
+    expect(view.totals.dailyTarget).toBeCloseTo(8_380 / 31, 5)
+  })
+
+  test("both lists are ordered by what they cost a month", () => {
+    expect(view.commitments.map((c) => c.payee)).toEqual([
+      "Mortgage",
+      "A Gym",
+      "A Streaming Service",
+    ])
+    expect(view.income.map((i) => i.payee)).toEqual(["Payroll", "Rent Received"])
   })
 
   test("payees are decoded for display", () => {
-    expect(view.commitments.map((c) => c.payee)).toContain("PG&E")
+    const escaped = budgetView([item({ payee: "PG&amp;E" })], "2026-08-16")
+    expect(escaped.commitments.map((c) => c.payee)).toContain("PG&E")
   })
 })

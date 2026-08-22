@@ -7,11 +7,11 @@
  * classified this yet", and it counts. Errors therefore make the number more
  * conservative, not less.
  *
- * On Checking the same rule is catastrophic: the $1,500.00 rent and the
- * five-figure Chase autopay both leave from there untagged. Aug 1-13 reads
- * $23,370 under a global untagged-counts rule versus $3,157 for Chase alone.
- * So the bank accounts are opt-in — only an explicit `spending` tag counts,
- * which is how ATM cash withdrawals make it into the number.
+ * On Checking the same rule is catastrophic: rent and the Chase autopay
+ * both leave from there untagged, and together they outweigh a month of
+ * discretionary spending by an order of magnitude. So the bank accounts are
+ * opt-in — only an explicit `spending` tag counts, which is how ATM cash
+ * withdrawals make it into the number.
  */
 
 import { accountNameOf, type LmTransaction } from "../lunchmoney/types"
@@ -42,12 +42,33 @@ export type AccountPolicy =
   /** Dormant or irrelevant. Never counts, never shown in the review queue. */
   | "ignore"
 
+/**
+ * The accounts, by the display name Lunch Money gives them.
+ *
+ * Exported as constants because policy keys on the name: a scenario that
+ * invents one silently lands in `UNKNOWN_ACCOUNT_POLICY` and passes for the
+ * wrong reason. These are production configuration, not private data.
+ */
+export const CHASE = "Card"
+export const VENMO = "Wallet"
+export const IGOR_PERSONAL = "Checking"
+export const FIDELITY_JOINT = "Savings"
+export const CHASE_UNITED = "Old Card"
+
+/** An account the policy has an opinion about. Anything else is unknown. */
+export type KnownAccount =
+  | typeof CHASE
+  | typeof VENMO
+  | typeof IGOR_PERSONAL
+  | typeof FIDELITY_JOINT
+  | typeof CHASE_UNITED
+
 export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
-  "Card": "spending",
-  "Wallet": "spending",
-  "Checking": "fixed",
-  "Savings": "fixed",
-  "Old Card": "ignore",
+  [CHASE]: "spending",
+  [VENMO]: "spending",
+  [IGOR_PERSONAL]: "fixed",
+  [FIDELITY_JOINT]: "fixed",
+  [CHASE_UNITED]: "ignore",
 }
 
 /**
@@ -107,8 +128,9 @@ const IGNORED = (reason: string, amount: number): Classification => ({
  * every movement, so each real transaction arrives paired with an internal
  * sweep. Both halves come through categorised "Payment, Transfer" and flagged
  * `exclude_from_totals`, which makes those two signals useless for telling a
- * genuine deposit from bookkeeping — a work reimbursement ("DIRECT DEPOSIT
- * Fractional ...") is indistinguishable from its own sweep by category alone.
+ * genuine deposit from bookkeeping — a work reimbursement arriving as
+ * "DIRECT DEPOSIT <employer> ..." is indistinguishable from its own sweep by
+ * category alone.
  *
  * The payee is what separates them. These patterns are the internal half.
  */
@@ -135,9 +157,9 @@ const WALLET_TRANSFER = /^venmo$/i
  * Card payments: the bill being settled, on either side of the transaction.
  *
  * Deliberately NOT keyed on `is_income` or an "Income" category. Lunch Money
- * files genuine merchant refunds that way too — a $195 credit from A Theatre
- * arrived as category "Income" — and treating those as settlements silently
- * swallowed money that should have come back. A refund is never called
+ * files genuine merchant refunds that way too — a real theatre credit arrived
+ * as category "Income" — and treating those as settlements silently swallowed
+ * money that should have come back. A refund is never called
  * "AUTOMATIC PAYMENT".
  */
 const CARD_PAYMENT = /automatic payment|credit card payment|crcardpmt|cautopay|chase credit/i

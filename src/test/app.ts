@@ -1,25 +1,23 @@
 import { createApp } from "../app"
-import { config } from "../config"
 import { FakeLunchMoneyClient } from "./fake-client"
-import { FIXTURE_NOW, FIXTURE_TODAY } from "./fixtures"
+import type { World } from "./world"
 
-/** Pinned so a stray env var cannot move the numbers the tests assert on. */
-export const TEST_CONFIG = {
-  ...config,
-  cacheTtlSeconds: 0,
-  statementCloseDay: 12,
-  statementDueDay: 9,
-  allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
-}
-
-export function useTestApp(client = new FakeLunchMoneyClient(), cacheTtlSeconds = 0) {
+/**
+ * A real Hono app over one world.
+ *
+ * `today` and `clock` come from the world rather than from globals, so a
+ * scenario cannot get its clock out of sync with its data — which it could,
+ * and did, when both were module-level constants every new test had to
+ * remember to respect.
+ */
+export function useTestApp(world: World, client = new FakeLunchMoneyClient(world)) {
   /** Collected rather than printed, so a test can assert on what was logged. */
   const logs: string[] = []
   const app = createApp({
     client,
-    config: { ...TEST_CONFIG, cacheTtlSeconds },
-    today: () => FIXTURE_TODAY,
-    clock: () => FIXTURE_NOW,
+    config: world.config,
+    today: () => world.today,
+    clock: () => world.now,
     log: (line) => logs.push(line),
   })
 

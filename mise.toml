@@ -36,10 +36,6 @@ bun tsc --noEmit
 description = "Run tests (offline; never touches the Lunch Money API)"
 run = "NODE_ENV=test bun test"
 
-[tasks."fixtures:record"]
-description = "Refresh test fixtures from the live Lunch Money API (manual only)"
-run = "bun run scripts/record-fixtures.ts"
-
 [tasks."configure:lunchmoney"]
 description = "One-time Lunch Money account config; dry run unless APPLY=1 (manual only)"
 run = "bun run scripts/configure-lunchmoney.ts"

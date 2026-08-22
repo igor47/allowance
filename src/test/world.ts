@@ -1,0 +1,448 @@
+/**
+ * A scenario is a world, not a transaction list.
+ *
+ * The four things Lunch Money would tell us — transactions, accounts, recurring
+ * items — plus the two things only a test knows: what day it is, and what
+ * instant it is. They travel together because they have to agree: a charge
+ * dated after `today` is a bug in the scenario, not a case worth covering, and
+ * `today` drifting from the clock used to be a real class of mistake here.
+ *
+ * The verbs below are thin wrappers over `factories.ts` that hide the three
+ * conventions which trip people up — the sign, the posted date, and the account
+ * name — so a scenario reads as a sentence about money rather than as a struct.
+ */
+
+import type { Config } from "../config"
+import { config as baseConfig } from "../config"
+import type { IsoDate } from "../domain/dates"
+import { CHASE, IGOR_PERSONAL, type KnownAccount, VENMO } from "../domain/policy"
+import type { LmPlaidAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
+import { account, metadata, recurringItem, type TxnOverrides, txn } from "./factories"
+
+export interface World {
+  transactions: LmTransaction[]
+  accounts: LmPlaidAccount[]
+  recurring: LmRecurringItem[]
+  today: IsoDate
+  now: Date
+  config: Config
+}
+
+/**
+ * Pinned so a stray env var cannot move the numbers a scenario asserts on.
+ * A round $200/day, because the real figure is nobody's business and the rule
+ * reads better against a number you can do in your head.
+ */
+export const TEST_CONFIG: Config = {
+  ...baseConfig,
+  cacheTtlSeconds: 0,
+  statementCloseDay: 12,
+  statementDueDay: 9,
+  allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
+}
+
+const DEFAULT_TODAY = "2026-08-14"
+
+/** Late enough in the day that a same-day import reads as fresh, not stale. */
+const instantFor = (today: IsoDate) => new Date(`${today}T21:00:00.000Z`)
+
+interface Timings {
+  imported: string
+  read: string
+}
+
+const timingsFor = (today: IsoDate): Timings => ({
+  imported: `${today}T04:00:00.000Z`,
+  read: `${today}T20:00:00.000Z`,
+})
+
+export interface WorldOptions {
+  today?: IsoDate
+  /** Defaults to the evening of `today`, so staleness never needs stating. */
+  now?: Date
+  config?: Partial<Config>
+}
+
+export interface ChargeOptions {
+  /** The day the card was used. Lunch Money's date. */
+  on: IsoDate
+  /** Dollars. Positive is money leaving, on every verb. */
+  amount: number
+  payee?: string
+  tags?: string[]
+  account?: KnownAccount
+  /** When Chase posted it, if that is not the day it was made. */
+  posted?: IsoDate
+  category?: string
+  /** Lunch Money's `exclude_from_totals`. */
+  excluded?: boolean
+  pending?: boolean
+  /** The raw statement descriptor, when a test cares that it differs. */
+  descriptor?: string
+}
+
+export interface DepositOptions {
+  on: IsoDate
+  amount: number
+  into?: KnownAccount
+  payee?: string
+  tags?: string[]
+  category?: string
+  excluded?: boolean
+}
+
+export interface SweepOptions {
+  on: IsoDate
+  amount: number
+  account?: KnownAccount
+}
+
+export interface WalletPaymentOptions {
+  on: IsoDate
+  amount: number
+  payee: string
+  tags?: string[]
+  category?: string
+  excluded?: boolean
+}
+
+export interface AutopayOptions {
+  /** The day the payment posts to the card — the statement's due date. */
+  on: IsoDate
+  amount: number
+  /**
+   * The bank account it debits. Given, the matching outflow is added there
+   * too, a day later, exactly as the real feed reports it.
+   */
+  from?: KnownAccount
+  /** When the bank side lands, if not the day after. */
+  debitedOn?: IsoDate
+  /** When Chase posted the credit, if that is not the day it ran. */
+  posted?: IsoDate
+  /**
+   * Lunch Money's category. Worth overriding: it files some autopays under
+   * "Income" with the exclude flag unset, which is why neither signal decides.
+   */
+  category?: string
+}
+
+export interface SubscriptionOptions {
+  payee: string
+  amount: number
+  cadence?: string
+  granularity?: string
+  quantity?: number
+  /** False for a manually-managed account: no feed, so nothing can ever link. */
+  tracked?: boolean
+  /** Dates in the period the plan expected and nothing arrived for. */
+  missing?: IsoDate[]
+  /** How many transactions Lunch Money linked to it this period. */
+  matched?: number
+}
+
+/**
+ * A world under construction. Every verb returns `this`, and the builder *is*
+ * the world, so it can be handed straight to `useTestApp` or `dashboard`.
+ */
+export class WorldBuilder implements World {
+  readonly transactions: LmTransaction[] = []
+  readonly accounts: LmPlaidAccount[] = []
+  readonly recurring: LmRecurringItem[] = []
+  readonly today: IsoDate
+  readonly now: Date
+  config: Config
+
+  constructor(options: WorldOptions = {}) {
+    this.today = options.today ?? DEFAULT_TODAY
+    this.now = options.now ?? instantFor(this.today)
+    this.config = { ...TEST_CONFIG, ...options.config }
+    // The card is always there. A scenario that says nothing about accounts
+    // still renders the summary boxes and reads as freshly synced, which is
+    // what lets most of them be three lines long.
+    this.account(CHASE, { balance: "0", to_base: 0 })
+  }
+
+  /** Override the allowance parameters without restating the rest of the config. */
+  allowance(over: Partial<Config["allowance"]>): this {
+    this.config = { ...this.config, allowance: { ...this.config.allowance, ...over } }
+    return this
+  }
+
+  /**
+   * Declare an account. Called twice for the same name, the second wins —
+   * so the constructor's default card can be replaced with a balance.
+   */
+  account(name: KnownAccount, over: Partial<LmPlaidAccount> = {}): this {
+    const timings = timingsFor(this.today)
+    const built = account({
+      display_name: name,
+      name,
+      type: name === CHASE ? "credit" : "cash",
+      balance_last_update: timings.read,
+      last_import: timings.imported,
+      last_fetch: timings.read,
+      plaid_last_successful_update: timings.read,
+      ...over,
+      // A balance given as a string should still reach `to_base`, which is what
+      // the dashboard actually reads.
+      to_base: over.to_base ?? (over.balance ? Number.parseFloat(over.balance) : 0),
+    })
+    const existing = this.accounts.findIndex((a) => (a.display_name ?? a.name) === name)
+    if (existing >= 0) this.accounts.splice(existing, 1, built)
+    else this.accounts.push(built)
+    return this
+  }
+
+  /** The escape hatch, for a shape no verb describes. Prefer a verb. */
+  transaction(overrides: TxnOverrides): this {
+    this.transactions.push(txn(overrides))
+    return this
+  }
+
+  /** Money spent. Positive `amount`; no test should type a minus sign. */
+  charge(options: ChargeOptions): this {
+    this.transactions.push(aCharge(options))
+    return this
+  }
+
+  /** Money coming back from a merchant. Also positive; the verb negates it. */
+  refund(options: ChargeOptions): this {
+    this.transactions.push(aRefund(options))
+    return this
+  }
+
+  /** Money arriving in a bank account: payroll, a cheque, a reimbursement. */
+  deposit(options: DepositOptions): this {
+    this.transactions.push(aDeposit(options))
+    return this
+  }
+
+  /**
+   * The card bill being settled. Lands on the card as a credit on the due date,
+   * and — if a bank is named — as a debit there a day or two later, which is
+   * how Plaid actually reports the pair.
+   */
+  autopay(options: AutopayOptions): this {
+    this.transactions.push(anAutopay(options))
+    if (options.from) this.transactions.push(anAutopayDebit(options))
+    return this
+  }
+
+  /** Fidelity's internal half, swept in or out of the core cash position. */
+  sweep(options: SweepOptions): this {
+    this.transactions.push(aSweep(options))
+    return this
+  }
+
+  /** Topping the wallet up, or emptying it back into the bank. */
+  walletTransfer(options: SweepOptions): this {
+    this.transactions.push(aWalletTransfer(options))
+    return this
+  }
+
+  /** Paying a person from the wallet. Counts, the way a card charge does. */
+  walletPayment(options: WalletPaymentOptions): this {
+    this.transactions.push(aWalletPayment(options))
+    return this
+  }
+
+  /** A committed cost in the plan. Positive amount, as everywhere else. */
+  subscription(options: SubscriptionOptions): this {
+    this.recurring.push(recurringOf(options, false))
+    return this
+  }
+
+  /** An expected income stream in the plan. */
+  income(options: SubscriptionOptions): this {
+    this.recurring.push(recurringOf(options, true))
+    return this
+  }
+}
+
+export function aWorld(options: WorldOptions = {}): WorldBuilder {
+  return new WorldBuilder(options)
+}
+
+/** Lunch Money sends stringified decimals, and the sign convention is load-bearing. */
+function money(amount: number): string {
+  return amount.toFixed(2)
+}
+
+function accountFields(name: KnownAccount): Partial<LmTransaction> {
+  return { account_display_name: name, plaid_account_display_name: name, asset_display_name: null }
+}
+
+function addOneDay(date: IsoDate): IsoDate {
+  const dt = new Date(`${date}T00:00:00Z`)
+  dt.setUTCDate(dt.getUTCDate() + 1)
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
+ * The verbs again, one transaction at a time.
+ *
+ * `src/domain/` is tested a transaction at a time rather than a world at a
+ * time, and it deserves the same vocabulary — these used to be re-discovered
+ * as a local helper in every file that needed one.
+ */
+
+function chargeOverrides(options: ChargeOptions, amount: number): TxnOverrides {
+  const payee = options.payee ?? "A Merchant"
+  return {
+    date: options.on,
+    amount: money(amount),
+    payee,
+    original_name: options.descriptor ?? payee.toUpperCase(),
+    category_name: options.category ?? "Shopping",
+    exclude_from_totals: options.excluded ?? false,
+    is_pending: options.pending ?? false,
+    ...accountFields(options.account ?? CHASE),
+    // Only written when it differs, so the "posted lags the swipe" cases are
+    // visible in the scenario rather than implied by a metadata blob.
+    plaid_metadata: options.posted
+      ? metadata({ posted: options.posted, authorized: options.on })
+      : null,
+    tags: options.tags ?? [],
+  }
+}
+
+export function aCharge(options: ChargeOptions): LmTransaction {
+  return txn(chargeOverrides(options, options.amount))
+}
+
+export function aRefund(options: ChargeOptions): LmTransaction {
+  return txn({ category_name: "Refund", ...chargeOverrides(options, -options.amount) })
+}
+
+export function aDeposit(options: DepositOptions): LmTransaction {
+  return txn({
+    date: options.on,
+    amount: money(-options.amount),
+    payee: options.payee ?? "A Deposit",
+    original_name: (options.payee ?? "A DEPOSIT").toUpperCase(),
+    category_name: options.category ?? "Income",
+    is_income: true,
+    exclude_from_totals: options.excluded ?? false,
+    ...accountFields(options.into ?? IGOR_PERSONAL),
+    tags: options.tags ?? [],
+  })
+}
+
+/**
+ * The card half of the autopay: a credit on the card, dated the statement's
+ * due date. This is the one `reconcile()` reads — it lands on the account
+ * whose statement is being reconstructed, and on the day the statement names.
+ */
+export function anAutopay(options: AutopayOptions): LmTransaction {
+  return txn({
+    date: options.on,
+    amount: money(-options.amount),
+    payee: "AUTOMATIC PAYMENT - THANK",
+    original_name: "AUTOMATIC PAYMENT - THANK YOU",
+    category_name: options.category ?? "Payment, Transfer",
+    is_income: options.category === "Income",
+    ...accountFields(CHASE),
+    plaid_metadata: options.posted
+      ? metadata({ posted: options.posted, authorized: options.on })
+      : null,
+  })
+}
+
+/**
+ * The bank half: the debit that leaves the current account a day or two later.
+ *
+ * Carries no information the card side does not, and must never reach the
+ * review queue — a five-figure row would be the loudest thing in it.
+ */
+export function anAutopayDebit(options: AutopayOptions): LmTransaction {
+  return txn({
+    date: options.debitedOn ?? addOneDay(options.on),
+    amount: money(options.amount),
+    payee: "DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)",
+    original_name: "DIRECT DEBIT CHASE CREDIT CAUTOPAY",
+    category_name: "Credit card payment",
+    ...accountFields(options.from ?? IGOR_PERSONAL),
+  })
+}
+
+/**
+ * Fidelity's internal half: cash swept in or out of the core position on every
+ * real movement. Categorised and excluded exactly like a genuine deposit,
+ * which is why only the payee separates them.
+ */
+export function aSweep(options: SweepOptions): LmTransaction {
+  return txn({
+    date: options.on,
+    amount: money(options.amount),
+    payee:
+      options.amount > 0
+        ? "PURCHASE INTO CORE ACCOUNT FDIC INSURED DEPOSIT"
+        : "REDEMPTION FROM CORE ACCOUNT FDIC INSURED DEPOSIT",
+    category_name: "Payment, Transfer",
+    exclude_from_totals: true,
+    ...accountFields(options.account ?? IGOR_PERSONAL),
+  })
+}
+
+/**
+ * Topping the wallet up, or emptying it back. Appears only on the bank side,
+ * with a payee of exactly "Venmo" — no name, no memo, which is the entire
+ * basis of the rule that catches it.
+ */
+export function aWalletTransfer(options: SweepOptions): LmTransaction {
+  return txn({
+    date: options.on,
+    amount: money(options.amount),
+    payee: "Venmo",
+    original_name: "VENMO",
+    category_name: "Payment, Transfer",
+    ...accountFields(options.account ?? IGOR_PERSONAL),
+  })
+}
+
+/** Paying a person from the wallet. Counts, the way a card charge does. */
+export function aWalletPayment(options: WalletPaymentOptions): LmTransaction {
+  return txn({
+    date: options.on,
+    amount: money(options.amount),
+    payee: options.payee,
+    original_name: options.payee,
+    category_name: options.category ?? "Payment, Transfer",
+    exclude_from_totals: options.excluded ?? true,
+    ...accountFields(VENMO),
+    institution_name: "Venmo - Personal",
+    tags: options.tags ?? [],
+  })
+}
+
+function recurringOf(options: SubscriptionOptions, isIncome: boolean): LmRecurringItem {
+  const tracked = options.tracked ?? true
+  const matched = options.matched ?? 0
+  return recurringItem({
+    payee: options.payee,
+    amount: (isIncome ? -options.amount : options.amount).toFixed(4),
+    cadence: options.cadence ?? "monthly",
+    granularity: options.granularity ?? granularityFor(options.cadence),
+    quantity: options.quantity ?? 1,
+    is_income: isIncome,
+    plaid_account_id: tracked ? 1 : null,
+    asset_id: tracked ? null : 1,
+    missing_dates_within_range: options.missing ?? [],
+    transactions_within_range: Array.from({ length: matched }, (_, i) => ({
+      id: i + 1,
+      date: "2026-08-10",
+    })),
+  })
+}
+
+/**
+ * What Lunch Money would report alongside the cadence. "Twice a month" arrives
+ * as (month, 1), identical to plain monthly — the ambiguity `perMonth` exists
+ * to resolve — so it must not be special-cased away here.
+ */
+function granularityFor(cadence: string | undefined): string {
+  if (!cadence) return "month"
+  if (cadence.includes("week")) return "week"
+  if (cadence.includes("year") && cadence !== "twice a year") return "year"
+  return "month"
+}

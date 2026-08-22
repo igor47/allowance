@@ -1,30 +1,42 @@
 import { describe, expect, test } from "bun:test"
-import { accountNameOf } from "../lunchmoney/types"
 import { txn } from "../test/factories"
-import { fixtureTransactions } from "../test/fixtures"
 import {
-  CLASSIFYING_TAGS,
+  aCharge,
+  aDeposit,
+  anAutopay,
+  anAutopayDebit,
+  aRefund,
+  aSweep,
+  aWalletPayment,
+  aWalletTransfer,
+} from "../test/world"
+import {
+  CHASE,
+  CHASE_UNITED,
   classify,
+  FIDELITY_JOINT,
+  IGOR_PERSONAL,
   looksLikeSettlement,
-  policyFor,
   unknownAccounts,
 } from "./policy"
 
 describe("account policy", () => {
   test("untagged spend on the discretionary card counts", () => {
-    const result = classify(txn({ account_display_name: "Card", amount: "42.00" }))
+    const result = classify(aCharge({ on: "2026-08-05", amount: 42, account: CHASE }))
     expect(result.counts).toBe(true)
     expect(result.bucket).toBe("spending")
     expect(result.reviewed).toBe(false)
   })
 
   test("untagged spend on a fixed-cost account does NOT count", () => {
-    // The trap this whole design exists to avoid: rent leaves Fidelity untagged.
-    const rent = txn({
-      account_display_name: "Checking",
-      amount: "1500.00",
-      payee: "A Property Manager",
-      category_name: "Rent",
+    // The trap this whole design exists to avoid: rent leaves the bank untagged,
+    // and it dwarfs a month of discretionary spending.
+    const rent = aCharge({
+      on: "2026-08-01",
+      amount: 5000,
+      account: IGOR_PERSONAL,
+      payee: "A Landlord",
+      category: "Rent",
     })
     const result = classify(rent)
     expect(result.counts).toBe(false)
@@ -32,139 +44,153 @@ describe("account policy", () => {
   })
 
   test("an explicit spending tag opts a cash withdrawal in", () => {
-    const atm = txn({
-      account_display_name: "Checking",
-      amount: "203.00",
-      payee: "CASH ADVANCE ATM6387 3473 17TH STRE SA",
-      category_name: "Cash",
-      tags: ["spending"],
-    })
-    const result = classify(atm)
-    expect(result.counts).toBe(true)
-    expect(result.reviewed).toBe(true)
+    const atm = classify(
+      aCharge({
+        on: "2026-08-04",
+        amount: 200,
+        account: IGOR_PERSONAL,
+        payee: "CASH ADVANCE ATM",
+        category: "Cash",
+        tags: ["spending"],
+      })
+    )
+    expect(atm.counts).toBe(true)
+    expect(atm.reviewed).toBe(true)
   })
 
   test("dormant accounts are ignored entirely", () => {
-    expect(classify(txn({ account_display_name: "Old Card" })).bucket).toBe("ignored")
+    expect(classify(aCharge({ on: "2026-08-05", amount: 30, account: CHASE_UNITED })).bucket).toBe(
+      "ignored"
+    )
   })
 
   test("unknown accounts default out and are surfaced", () => {
-    const mystery = txn({ account_display_name: "Ally Savings", amount: "500.00" })
+    // Built with the raw factory on purpose: the world builder only accepts
+    // account names the policy knows, which is what makes a typo a type error.
+    const mystery = txn({ account_display_name: "A Savings Account", amount: "500.00" })
     expect(classify(mystery).counts).toBe(false)
-    expect(unknownAccounts([mystery])).toEqual(["Ally Savings"])
+    expect(unknownAccounts([mystery])).toEqual(["A Savings Account"])
+  })
+
+  test("the accounts with a policy are not reported as unknown", () => {
+    const known = [
+      aCharge({ on: "2026-08-01", amount: 10, account: CHASE }),
+      aCharge({ on: "2026-08-01", amount: 10, account: IGOR_PERSONAL }),
+      aCharge({ on: "2026-08-01", amount: 10, account: FIDELITY_JOINT }),
+      aCharge({ on: "2026-08-01", amount: 10, account: CHASE_UNITED }),
+      aWalletPayment({ on: "2026-08-01", amount: 10, payee: "A Friend" }),
+    ]
+    expect(unknownAccounts(known)).toEqual([])
   })
 })
 
 describe("tags", () => {
   test("recurring and irregular are excluded", () => {
-    expect(classify(txn({ tags: ["recurring"] })).counts).toBe(false)
-    expect(classify(txn({ tags: ["irregular"] })).counts).toBe(false)
+    expect(classify(aCharge({ on: "2026-08-05", amount: 60, tags: ["recurring"] })).counts).toBe(
+      false
+    )
+    expect(classify(aCharge({ on: "2026-08-05", amount: 60, tags: ["irregular"] })).counts).toBe(
+      false
+    )
   })
 
   test("a classifying tag beats the settlement heuristic", () => {
-    const disputed = txn({ category_name: "Payment, Transfer", tags: ["spending"] })
+    const disputed = aCharge({
+      on: "2026-08-05",
+      amount: 60,
+      category: "Payment, Transfer",
+      tags: ["spending"],
+    })
     expect(classify(disputed).counts).toBe(true)
   })
 
   test("person tags do not affect the math", () => {
-    expect(classify(txn({ tags: ["serena"] })).counts).toBe(true)
-    expect(classify(txn({ tags: ["serena"] })).reviewed).toBe(false)
+    const tagged = classify(aCharge({ on: "2026-08-05", amount: 60, tags: ["serena"] }))
+    expect(tagged.counts).toBe(true)
+    expect(tagged.reviewed).toBe(false)
   })
 })
 
 describe("negative amounts", () => {
   test("a refund on the card credits the allowance back", () => {
-    const refund = txn({ amount: "-38.00", payee: "Target", category_name: "Superstores" })
-    const result = classify(refund)
+    const result = classify(aRefund({ on: "2026-08-06", amount: 38, payee: "A Retailer" }))
     expect(result.counts).toBe(true)
     expect(result.amount).toBe(-38)
   })
 
   test("a card autopay never credits the allowance", () => {
-    // Lunch Money filed the 2026-07-09 autopay as Income with the exclude flag
-    // unset, so the flag alone is not enough to catch these.
-    const payment = txn({
-      amount: "-4900.00",
-      payee: "AUTOMATIC PAYMENT - THANK",
-      category_name: "Income",
-      is_income: true,
-      exclude_from_totals: false,
-    })
+    // Lunch Money files some autopays as Income with the exclude flag unset, so
+    // the flag alone is not enough to catch these.
+    const payment = anAutopay({ on: "2026-07-09", amount: 9000, category: "Income" })
     expect(classify(payment).counts).toBe(false)
     expect(looksLikeSettlement(payment)).toBe(true)
   })
 
   test("deposits into a fixed-cost account never count", () => {
-    const payroll = txn({
-      account_display_name: "Checking",
-      amount: "-1800.00",
-      payee: "DIRECT DEPOSIT SERVICECO MEPAYROLL",
-      category_name: "Income",
+    const payroll = aDeposit({
+      on: "2026-08-01",
+      amount: 6000,
+      payee: "DIRECT DEPOSIT PAYROLL",
+      into: IGOR_PERSONAL,
     })
     expect(classify(payroll).counts).toBe(false)
   })
 
   test("a card autopay leaving the bank account is not a review item", () => {
-    // $4,200.00 out of Fidelity every month. It is the Chase bill being paid,
-    // not spending, and it should never appear in the queue.
-    const autopay = txn({
-      account_display_name: "Checking",
-      amount: "4200.00",
-      payee: "DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)",
-      category_name: "Credit card payment",
-    })
-    const result = classify(autopay)
+    // It is the card bill being paid, not spending, and it should never appear
+    // in the queue — where a five-figure row would be the loudest thing there.
+    const result = classify(anAutopayDebit({ on: "2026-08-09", amount: 9000, from: IGOR_PERSONAL }))
     expect(result.bucket).toBe("ignored")
     expect(result.counts).toBe(false)
   })
 
   test("rent stays a review item, since it is not a transfer", () => {
-    const rent = txn({
-      account_display_name: "Checking",
-      amount: "1500.00",
-      payee: "A Property Manager",
-      category_name: "Rent",
+    const rent = aCharge({
+      on: "2026-08-01",
+      amount: 5000,
+      account: IGOR_PERSONAL,
+      payee: "A Landlord",
+      category: "Rent",
     })
     expect(classify(rent).bucket).toBe("unclassified")
   })
 
   test("a merchant refund filed as Income still credits the allowance", () => {
-    // Lunch Money filed a real $195 credit from A Theatre under "Income".
-    // Treating an Income category as a settlement swallowed money that should
-    // have come back, so the payee is what decides.
-    const refund = txn({
-      amount: "-195.00",
-      payee: "A Theatreertory The",
-      category_name: "💵 Income",
-      is_income: true,
+    // Lunch Money files genuine merchant credits under "Income" too. Treating
+    // an Income category as a settlement swallowed money that should have come
+    // back, so the payee is what decides.
+    const refund = aRefund({
+      on: "2026-08-06",
+      amount: 195,
+      payee: "A Theatre",
+      category: "💵 Income",
     })
-    const result = classify(refund)
+    const result = classify({ ...refund, is_income: true })
     expect(result.counts).toBe(true)
     expect(result.amount).toBe(-195)
   })
 
   test("on the card, a credit is a refund unless the payee says otherwise", () => {
     // Lunch Money's exclude flag does not decide this. Only the payee does.
-    expect(classify(txn({ amount: "-100.00", exclude_from_totals: true })).counts).toBe(true)
-    expect(classify(txn({ amount: "-100.00", payee: "AUTOMATIC PAYMENT - THANK" })).counts).toBe(
-      false
-    )
+    const credit = aRefund({ on: "2026-08-06", amount: 100, excluded: true })
+    expect(classify(credit).counts).toBe(true)
+    expect(classify(anAutopay({ on: "2026-08-09", amount: 100 })).counts).toBe(false)
   })
 })
 
 describe("reimbursements", () => {
-  const deposit = (over = {}) =>
-    txn({
-      account_display_name: "Checking",
-      amount: "-154.00",
-      payee: "CHECK RECEIVED (Cash)",
-      category_name: "💵 Income",
-      is_income: true,
+  const aCheque = (over: Partial<Parameters<typeof aDeposit>[0]> = {}) =>
+    aDeposit({
+      on: "2026-08-07",
+      amount: 154,
+      into: IGOR_PERSONAL,
+      payee: "CHECK RECEIVED",
+      category: "💵 Income",
       ...over,
     })
 
   test("a deposit does not count, but can be tagged", () => {
-    const result = classify(deposit())
+    const result = classify(aCheque())
     expect(result.bucket).toBe("deposit")
     expect(result.counts).toBe(false)
     expect(result.taggable).toBe(true)
@@ -173,162 +199,116 @@ describe("reimbursements", () => {
   test("tagging a reimbursement spending gives the allowance back", () => {
     // Spend on the card for work, get repaid into the bank: the purchase counts
     // and the repayment counts negatively, so the pair nets to zero.
-    const result = classify(deposit({ tags: ["spending"] }))
+    const result = classify(aCheque({ tags: ["spending"] }))
     expect(result.counts).toBe(true)
     expect(result.amount).toBe(-154)
   })
 
   test("a reimbursement flagged as a transfer is still taggable", () => {
-    // The real case: Fidelity sweeps cash on every movement, so this arrives
-    // categorised "Payment, Transfer" AND excluded from totals — the same
-    // signals as its own internal sweep. Trusting either made it untaggable,
-    // which meant a work reimbursement could never be credited back.
-    const reimbursement = txn({
-      account_display_name: "Checking",
-      amount: "-245.86",
-      payee: "DIRECT DEPOSIT Fractional ABDW3EEY5HF (Cash)",
-      category_name: "🔄 Payment, Transfer",
-      exclude_from_totals: true,
-    })
-    expect(classify(reimbursement).bucket).toBe("deposit")
-    expect(classify(reimbursement).taggable).toBe(true)
+    // The real case: the brokerage sweeps cash on every movement, so this
+    // arrives categorised "Payment, Transfer" AND excluded from totals — the
+    // same signals as its own internal sweep. Trusting either made it
+    // untaggable, which meant a work reimbursement could never be credited back.
+    const swept = {
+      payee: "DIRECT DEPOSIT An Employer",
+      category: "🔄 Payment, Transfer",
+      excluded: true,
+    }
+    expect(classify(aCheque(swept)).bucket).toBe("deposit")
+    expect(classify(aCheque(swept)).taggable).toBe(true)
 
     // ...and tagging it works, despite Lunch Money excluding it.
-    const tagged = classify({
-      ...reimbursement,
-      tags: [{ id: 1, name: "spending", description: null, archived: false }],
-    })
+    const tagged = classify(aCheque({ ...swept, tags: ["spending"] }))
     expect(tagged.counts).toBe(true)
-    expect(tagged.amount).toBe(-245.86)
+    expect(tagged.amount).toBe(-154)
   })
 
   test("the sweep that pairs with it is not a deposit", () => {
-    const sweep = txn({
-      account_display_name: "Checking",
-      amount: "245.86",
-      payee: "PURCHASE INTO CORE ACCOUNT FDIC INSURED DEPOSIT",
-      category_name: "🔄 Payment, Transfer",
-      exclude_from_totals: true,
-    })
-    expect(classify(sweep).bucket).toBe("ignored")
-    expect(classify(sweep).reason).toBe("internal account sweep")
+    const sweep = classify(aSweep({ on: "2026-08-07", amount: 154, account: IGOR_PERSONAL }))
+    expect(sweep.bucket).toBe("ignored")
+    expect(sweep.reason).toBe("internal account sweep")
   })
 
   test("payroll and transfers are not reimbursements by default", () => {
-    expect(classify(deposit({ payee: "DIRECT DEPOSIT SERVICECO MEPAYROLL" })).counts).toBe(false)
-    expect(classify(deposit({ payee: "REDEMPTION FROM CORE ACCOUNT FDIC" })).bucket).toBe("ignored")
-  })
-})
-
-describe("against recorded data", () => {
-  const august = fixtureTransactions.filter((t) => t.date >= "2026-08-01" && t.date <= "2026-08-13")
-
-  test("per-account policy keeps August in the hundreds, not the tens of thousands", () => {
-    const counted = august
-      .map(classify)
-      .filter((c) => c.counts)
-      .reduce((sum, c) => sum + c.amount, 0)
-
-    // A global untagged-counts rule reads ~$23,370 here because rent ($5,922)
-    // and the card autopay ($14,291) leave from Fidelity untagged.
-    expect(counted).toBeLessThan(5_000)
-    expect(counted).toBeGreaterThan(2_000)
-  })
-
-  test("nothing from a fixed-cost account slips in untagged", () => {
-    // Tagged rows are the point of the tag, not a leak: an August
-    // reimbursement on Checking carries `spending` deliberately, to credit
-    // the allowance back for the purchase it repays. Only silence counts here.
-    const leaked = august.filter(
-      (t) =>
-        classify(t).counts &&
-        policyFor(accountNameOf(t)) === "fixed" &&
-        !t.tags.some((g) => CLASSIFYING_TAGS.includes(g.name.toLowerCase()))
-    )
-    expect(leaked).toEqual([])
+    expect(classify(aCheque({ payee: "DIRECT DEPOSIT PAYROLL" })).counts).toBe(false)
+    expect(classify(aSweep({ on: "2026-08-07", amount: -154 })).bucket).toBe("ignored")
   })
 })
 
 describe("Lunch Money's exclude flag on the card", () => {
-  // Four Chase charges carried exclude_from_totals across three months, all of
-  // them because they were filed under "Payment, Transfer". Three were real.
-  const excluded = (over = {}) =>
-    txn({ exclude_from_totals: true, category_name: "🔄 Payment, Transfer", ...over })
-
+  // Charges land under "Payment, Transfer" and pick up the exclude flag from it
+  // about once a month, and when they do the charge is usually real.
   test("a real charge filed as a transfer still counts", () => {
-    const hotel = excluded({ payee: "COSMOPOL-ADV DEP", amount: "196.15" })
+    const hotel = aCharge({
+      on: "2026-08-03",
+      amount: 196.15,
+      payee: "A Hotel",
+      category: "🔄 Payment, Transfer",
+      excluded: true,
+    })
     expect(classify(hotel).counts).toBe(true)
     expect(classify(hotel).reason).toContain("despite Lunch Money excluding it")
   })
 
   test("a refund filed as a transfer still credits back", () => {
-    const refund = excluded({ payee: "A DOG DAYCARE", amount: "-700.00" })
+    const refund = aRefund({
+      on: "2026-08-03",
+      amount: 250,
+      payee: "A Kennel",
+      category: "🔄 Payment, Transfer",
+      excluded: true,
+    })
     expect(classify(refund).counts).toBe(true)
-    expect(classify(refund).amount).toBe(-1690)
+    expect(classify(refund).amount).toBe(-250)
   })
 
   test("the actual card payment is still excluded", () => {
-    const payment = excluded({ payee: "AUTOMATIC PAYMENT - THANK", amount: "-4200.00" })
-    expect(classify(payment).counts).toBe(false)
+    expect(classify(anAutopay({ on: "2026-08-09", amount: 4000 })).counts).toBe(false)
   })
 })
 
 describe("the wallet", () => {
-  const wallet = (over = {}) =>
-    txn({
-      account_display_name: "Wallet",
-      plaid_account_display_name: "Wallet",
-      institution_name: "Venmo - Personal",
-      category_name: "🔄 Payment, Transfer",
-      exclude_from_totals: true,
-      ...over,
-    })
-
   test("paying a person counts, the way a card charge does", () => {
-    const dinner = wallet({ payee: 'Karina Solomonik "🏖️🛖🌊🐩"', amount: "600.00" })
+    const dinner = aWalletPayment({ on: "2026-08-05", amount: 80, payee: "A Friend" })
     expect(classify(dinner).counts).toBe(true)
     expect(classify(dinner).bucket).toBe("spending")
   })
 
   test("funding the wallet is a transfer, on the bank side where it appears", () => {
-    // Venmo reports only its own person-to-person half, so the top-up shows up
-    // once, on the bank statement, as a payee of exactly "Venmo".
-    const topUp = txn({ account_display_name: "Savings", payee: "Venmo", amount: "150.00" })
-    expect(classify(topUp).counts).toBe(false)
-    expect(classify(topUp).reason).toBe("moving money in or out of the wallet")
+    // The wallet reports only its own person-to-person half, so the top-up
+    // shows up once, on the bank statement, as a payee of exactly "Venmo".
+    const topUp = classify(
+      aWalletTransfer({ on: "2026-08-02", amount: 150, account: FIDELITY_JOINT })
+    )
+    expect(topUp.counts).toBe(false)
+    expect(topUp.reason).toBe("moving money in or out of the wallet")
 
-    const cashOut = txn({
-      account_display_name: "Checking",
-      payee: "Venmo",
-      amount: "-150.00",
-    })
+    const cashOut = aWalletTransfer({ on: "2026-08-03", amount: -150, account: IGOR_PERSONAL })
     expect(classify(cashOut).counts).toBe(false)
   })
 
   test("a person's name is never mistaken for the wallet itself", () => {
-    // Nine bank rows say "Venmo" and none of the fourteen wallet rows do, which
-    // is the whole basis of the rule above.
-    const fromAFriend = wallet({ payee: 'Lee Granas "Food!"', amount: "-20.00" })
+    // Bank rows say exactly "Venmo" and wallet rows never do, which is the
+    // whole basis of the rule above.
+    const fromAFriend = aWalletPayment({ on: "2026-08-05", amount: -20, payee: "A Friend" })
     expect(classify(fromAFriend).counts).toBe(true)
   })
 
   test("a loan repaid is neither spend nor refund once tagged", () => {
-    const lent = wallet({
-      payee: 'Nico Schafgans "overpayment"',
-      amount: "222.00",
+    const lent = aWalletPayment({
+      on: "2026-08-01",
+      amount: 200,
+      payee: "A Friend",
       tags: ["irregular"],
     })
-    const repaid = wallet({
-      payee: 'Nico Schafgans "Loan repayment may and Jun"',
-      amount: "-222.00",
+    const repaid = aWalletPayment({
+      on: "2026-08-12",
+      amount: -200,
+      payee: "A Friend",
       tags: ["irregular"],
     })
     expect(classify(lent).counts).toBe(false)
     expect(classify(repaid).counts).toBe(false)
     expect(classify(repaid).bucket).toBe("irregular")
-  })
-
-  test("the wallet is no longer an unknown account", () => {
-    expect(unknownAccounts(fixtureTransactions)).toEqual([])
   })
 })

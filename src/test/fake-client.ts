@@ -5,21 +5,26 @@ import type {
   LmTransaction,
   LunchMoneyClient,
 } from "../lunchmoney/types"
-import { fixtureAccounts, fixtureRecurring, fixtureTransactions } from "./fixtures"
+import type { World } from "./world"
 
-/** An in-memory Lunch Money. Writes are visible to subsequent reads. */
+/**
+ * An in-memory Lunch Money, serving one world. Writes are visible to
+ * subsequent reads, so tag round-trips work as they do against the real API.
+ *
+ * There is deliberately no default world: `new FakeLunchMoneyClient()` used to
+ * mean "820 real transactions", which made every test that forgot an argument
+ * quietly assert against a recording.
+ */
 export class FakeLunchMoneyClient implements LunchMoneyClient {
   readonly writes: { transactionId: number; tags: string[] }[] = []
   private readonly store: LmTransaction[]
   private readonly accounts: LmPlaidAccount[]
+  private readonly recurring: LmRecurringItem[]
 
-  constructor(
-    transactions: LmTransaction[] = fixtureTransactions,
-    accounts = fixtureAccounts,
-    private readonly recurring: LmRecurringItem[] = fixtureRecurring
-  ) {
-    this.store = transactions.map((t) => ({ ...t, tags: [...t.tags] }))
-    this.accounts = accounts
+  constructor(world: World) {
+    this.store = world.transactions.map((t) => ({ ...t, tags: [...t.tags] }))
+    this.accounts = world.accounts
+    this.recurring = world.recurring
   }
 
   reads = 0
@@ -31,8 +36,8 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
 
   async recurringItems(_start: string, _end: string): Promise<LmRecurringItem[]> {
     this.reads += 1
-    // The fixture was recorded for one month; the range is not re-applied
-    // because a recurring item spans periods rather than falling inside one.
+    // The range is not re-applied: a recurring item spans periods rather than
+    // falling inside one, and the API answers "what is planned" either way.
     return this.recurring
   }
 

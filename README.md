@@ -25,7 +25,6 @@ LUNCHMONEY_API_KEY=... mise run dev      # http://localhost:3005
 | `mise run check` | biome lint + `tsc --noEmit` |
 | `mise run check:fix` | auto-fix, then typecheck |
 | `mise run test` | offline tests — never touches the live API |
-| `mise run fixtures:record` | refresh test fixtures from the live API |
 | `mise run smoke` | print the live numbers as text |
 | `mise run publish` | build + push the image (gated on check + test) |
 

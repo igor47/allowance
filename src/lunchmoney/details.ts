@@ -43,21 +43,6 @@ interface RawMetadata {
   counterparties?: { logo_url?: string | null; website?: string | null }[]
 }
 
-/** The subset re-serialised into fixtures — everything above, nothing else. */
-export const METADATA_KEYS = [
-  "date",
-  "authorized_date",
-  "name",
-  "merchant_name",
-  "merchant_category_code",
-  "payment_channel",
-  "website",
-  "logo_url",
-  "location",
-  "personal_finance_category",
-  "counterparties",
-] as const
-
 function parseMetadata(txn: LmTransaction): RawMetadata {
   if (!txn.plaid_metadata) return {}
   try {

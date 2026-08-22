@@ -1,28 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { LmPlaidAccount } from "../lunchmoney/types"
+import { account } from "../test/factories"
 import { ago, freshness, staleness } from "./freshness"
 
 const NOW = new Date("2026-08-14T23:32:00Z")
-
-const account = (over: Partial<LmPlaidAccount>): LmPlaidAccount =>
-  ({
-    id: 1,
-    name: "CREDIT CARD",
-    display_name: "Card",
-    type: "credit",
-    subtype: "credit card",
-    mask: "0000",
-    institution_name: "Chase",
-    status: "active",
-    limit: null,
-    balance: "0",
-    to_base: 0,
-    currency: "usd",
-    balance_last_update: "2026-08-14T21:35:25.463Z",
-    last_import: "2026-08-14T04:52:15.051Z",
-    last_fetch: "2026-08-14T21:35:25.872Z",
-    ...over,
-  }) as LmPlaidAccount
 
 describe("freshness", () => {
   test("reports the newest transaction it holds", () => {

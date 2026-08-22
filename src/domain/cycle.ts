@@ -20,6 +20,14 @@ export interface Cycle {
 }
 
 export interface CycleView {
+  /**
+   * The statement before last: closed, due, and already paid.
+   *
+   * The only cycle the app can check its own arithmetic against, because it is
+   * the only one Chase has stated a figure for — the autopay that settled it.
+   * See `reconcile()` in card.ts.
+   */
+  settled: Cycle
   /** The statement that has closed but not yet been paid. */
   lastClosed: Cycle
   /** Charges since that close — this becomes next month's bill. */
@@ -32,6 +40,18 @@ function onDay(year: number, month: number, day: number): IsoDate {
   return dt.set({ day: Math.min(day, dt.daysInMonth ?? 28) }).toISODate() as IsoDate
 }
 
+/** The whole cycle implied by the date it closes on. */
+function cycleEndingAt(close: IsoDate, closeDay: number, dueDay: number): Cycle {
+  const closeDt = parse(close)
+  const prior = closeDt.minus({ months: 1 })
+  const dueMonth = closeDt.plus({ months: 1 })
+  return {
+    start: addDays(onDay(prior.year, prior.month, closeDay), 1),
+    end: close,
+    due: onDay(dueMonth.year, dueMonth.month, dueDay),
+  }
+}
+
 export function cycleView(today: IsoDate, closeDay: number, dueDay: number): CycleView {
   const now = parse(today)
   // The most recent close on or before today.
@@ -40,18 +60,13 @@ export function cycleView(today: IsoDate, closeDay: number, dueDay: number): Cyc
     const prev = now.minus({ months: 1 })
     close = onDay(prev.year, prev.month, closeDay)
   }
-  const closeDt = parse(close)
-  const prior = closeDt.minus({ months: 1 })
-  const priorClose = onDay(prior.year, prior.month, closeDay)
-  const dueMonth = closeDt.plus({ months: 1 })
+  const lastClosed = cycleEndingAt(close, closeDay, dueDay)
+  const settled = cycleEndingAt(addDays(lastClosed.start, -1), closeDay, dueDay)
+  const next = parse(close).plus({ months: 1 })
 
-  const next = closeDt.plus({ months: 1 })
   return {
-    lastClosed: {
-      start: addDays(priorClose, 1),
-      end: close,
-      due: onDay(dueMonth.year, dueMonth.month, dueDay),
-    },
+    settled,
+    lastClosed,
     current: {
       start: addDays(close, 1),
       end: today,

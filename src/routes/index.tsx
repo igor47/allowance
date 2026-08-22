@@ -3,7 +3,7 @@ import type { AppEnv } from "../app"
 import { Budget } from "../components/Budget"
 import { Layout } from "../components/Layout"
 import { MonthPicker, monthLabel } from "../components/MonthPicker"
-import { Allowance, Boxes } from "../components/Summary"
+import { Allowance, Boxes, StatementCheck } from "../components/Summary"
 import { Sync } from "../components/Sync"
 import { TransactionList, TransactionRow } from "../components/Transactions"
 import { HISTORY_START } from "../config"
@@ -100,6 +100,7 @@ dashboardRoutes.get("/", async (c) => {
           <code class="ms-1">ACCOUNT_POLICY</code>.
         </div>
       ) : null}
+      <StatementCheck dashboard={dashboard} />
       <Allowance dashboard={dashboard} />
       <Boxes dashboard={dashboard} />
       <TransactionList

@@ -287,6 +287,61 @@ describe("deposits", () => {
   })
 })
 
+describe("the statement check", () => {
+  /**
+   * A world with the statement before last in it, and the autopay that settled
+   * it. That pair is the only external oracle the app has for its own
+   * arithmetic — see `reconcile()`.
+   */
+  const withASettledStatement = (billed: number, paid: number) =>
+    august()
+      // Predates the 6/13 cycle start, so the history demonstrably reaches back
+      // far enough for the reconstruction to mean anything.
+      .charge({ on: "2026-06-09", amount: 0.01, payee: "An Older Charge" })
+      .charge({ on: "2026-06-20", amount: billed, payee: "An Earlier Charge" })
+      .autopay({ on: "2026-08-09", amount: paid, from: IGOR_PERSONAL })
+
+  test("says nothing when the reconstruction matches what Chase debited", async () => {
+    const page = await dashboard(withASettledStatement(1_000, 1_000))
+    expect(page.banners).toEqual([])
+  })
+
+  test("says so when it does not", async () => {
+    const page = await dashboard(withASettledStatement(1_000, 1_300))
+    const banner = page.banners.join(" ")
+    expect(banner).toContain("Statement check")
+    expect(banner).toContain("settled for $1,300.00")
+    expect(banner).toContain("reconstructed $1,000.00")
+    expect(banner).toContain("$300.00")
+    expect(banner).toContain("more than expected")
+  })
+
+  test("the autopay itself never reaches the review queue", async () => {
+    // Both halves of it: a five-figure row would be the loudest thing there.
+    const page = await dashboard(withASettledStatement(1_000, 1_000))
+    expect(page.rows.map((r) => r.payee)).not.toContain("AUTOMATIC PAYMENT - THANK")
+    expect(page.rows.map((r) => r.payee)).not.toContain("DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)")
+  })
+
+  test("stays quiet when the payment has not landed yet", async () => {
+    const page = await dashboard(
+      august()
+        .charge({ on: "2026-06-09", amount: 10, payee: "An Older Charge" })
+        .charge({ on: "2026-06-20", amount: 1_000, payee: "An Earlier Charge" })
+    )
+    expect(page.banners).toEqual([])
+  })
+
+  test("stays quiet when the history does not reach back to the statement", async () => {
+    // The charges it settled are outside the linked history, so there is
+    // nothing to reconstruct — and a five-figure "discrepancy" would be a lie.
+    const page = await dashboard(
+      august().autopay({ on: "2026-08-09", amount: 9_000, from: IGOR_PERSONAL })
+    )
+    expect(page.banners).toEqual([])
+  })
+})
+
 describe("sync", () => {
   test("lives in the navbar and says how stale the data is", async () => {
     const page = await dashboard(august())

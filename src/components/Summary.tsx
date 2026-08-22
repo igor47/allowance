@@ -1,6 +1,34 @@
 import type { Dashboard } from "../services/dashboard"
-import { longDate, money, shortDate } from "./format"
+import { cents, longDate, money, shortDate } from "./format"
 import { MonthChart } from "./MonthChart"
+
+/**
+ * The app checking its own arithmetic against Chase, and saying so only when
+ * it disagrees.
+ *
+ * Silence is the normal state and is itself the reassurance: the statement
+ * before last was settled for exactly what we said it billed. When it was not,
+ * that is worth a person's attention, because a Due figure quietly wrong by a
+ * few hundred dollars is the sort of thing that otherwise goes unnoticed for
+ * months. See `reconcile()` for why this is checkable at all.
+ */
+export const StatementCheck = ({ dashboard }: { dashboard: Dashboard }) => {
+  const { settled } = dashboard.card
+  const rec = settled.reconciliation
+  if (!rec.checkable || rec.agrees || rec.delta === null || rec.paid === null) return null
+
+  return (
+    <div class="alert alert-warning py-2 small" id="statement-check">
+      <strong>Statement check.</strong> The {shortDate(settled.start)}–{shortDate(settled.end)}{" "}
+      statement settled for {cents(rec.paid)} on {shortDate(rec.paidOn ?? settled.due)}, but we
+      reconstructed {cents(rec.billed)} of charges
+      {rec.creditsAfterClose !== 0 ? ` less ${cents(-rec.creditsAfterClose)} of credits` : ""} — a
+      difference of <strong>{cents(Math.abs(rec.delta))}</strong>{" "}
+      {rec.delta > 0 ? "less than expected" : "more than expected"}. Either something is missing
+      from the feed, or the balance was not paid in full.
+    </div>
+  )
+}
 
 const Stat = ({
   label,

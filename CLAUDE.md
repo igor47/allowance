@@ -63,6 +63,10 @@ from her phone.
 - `allowance.ts` — the rolling balance and rollover cap
 - `cycle.ts` — credit card statement cycle boundaries
 
+`card.ts` also holds `reconcile()`, which checks the reconstruction against the
+autopay Chase actually debited — the one figure in the data that did not come
+from us. See its doc comment for why that is a real oracle and not a tautology.
+
 These are pure. Keep API shapes, HTTP, and rendering out of them; anything that
 reaches for `fetch` or `Date.now()` directly belongs in a caller, and the
 current date is always an argument.

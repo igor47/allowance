@@ -9,7 +9,13 @@ import {
   periodStartFor,
 } from "../domain/allowance"
 import { type BudgetView, budgetView } from "../domain/budget"
-import { type CycleTotal, cycleTotal, reconciliation, STATEMENT_ACCOUNT } from "../domain/card"
+import {
+  type CycleTotal,
+  cycleTotal,
+  type Reconciliation,
+  reconcile,
+  STATEMENT_ACCOUNT,
+} from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
 import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
@@ -29,7 +35,8 @@ export interface CardView {
   reported: number | null
   lastClosed: Cycle & { total: CycleTotal }
   current: { start: IsoDate; end: IsoDate; closes: IsoDate; total: CycleTotal }
-  reconciliation: ReturnType<typeof reconciliation> | null
+  /** The statement before last, checked against the autopay that settled it. */
+  settled: Cycle & { total: CycleTotal; reconciliation: Reconciliation }
 }
 
 export interface Dashboard {
@@ -120,15 +127,18 @@ export class DashboardService {
     const { statementCloseDay, statementDueDay, allowance } = this.config
     const cycles = cycleView(today, statementCloseDay, statementDueDay)
 
-    // One fetch covering both the budgeting period and the open statement.
+    // One fetch covering the budgeting period, the open statement, and the one
+    // before it — which is the only statement the autopay has settled, and so
+    // the only one `reconcile()` can check the arithmetic against. That is one
+    // extra month on a call that is cached anyway.
     //
     // The API filters on the Lunch Money date — Plaid's *authorized* date —
     // while statement cycles are bucketed by the posted date, which lags by up
     // to four days. Without the slack, a charge swiped just before a cycle
     // opened but posted just after it is missing from the statement total,
-    // which understated the August bill by $303.
+    // which understated a month's bill by a few hundred dollars.
     const periodStart = periodStartFor(allowance, today)
-    const earliest = periodStart < cycles.lastClosed.start ? periodStart : cycles.lastClosed.start
+    const earliest = periodStart < cycles.settled.start ? periodStart : cycles.settled.start
     const start = addDays(earliest, -POSTING_SLACK_DAYS)
     const { transactions, accounts } = await this.load(start, today)
 
@@ -141,6 +151,7 @@ export class DashboardService {
 
     const lastClosedTotal = cycleTotal(transactions, cycles.lastClosed.start, cycles.lastClosed.end)
     const currentTotal = cycleTotal(transactions, cycles.current.start, cycles.current.end)
+    const settledTotal = cycleTotal(transactions, cycles.settled.start, cycles.settled.end)
     const reported = balanceOf(accounts, STATEMENT_ACCOUNT)
 
     return {
@@ -152,10 +163,11 @@ export class DashboardService {
         reported,
         lastClosed: { ...cycles.lastClosed, total: lastClosedTotal },
         current: { ...cycles.current, total: currentTotal },
-        reconciliation:
-          reported === null
-            ? null
-            : reconciliation(reported, lastClosedTotal.net + currentTotal.net),
+        settled: {
+          ...cycles.settled,
+          total: settledTotal,
+          reconciliation: reconcile(transactions, cycles.settled, { windowStart: start }),
+        },
       },
       transactions: inPeriod,
       // Deposits are taggable but not review items — payroll arriving twice a

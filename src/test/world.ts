@@ -136,6 +136,8 @@ export interface SubscriptionOptions {
   tracked?: boolean
   /** Dates in the period the plan expected and nothing arrived for. */
   missing?: IsoDate[]
+  /** Dates the plan expects a charge on, when the cadence alone cannot say. */
+  expected?: IsoDate[]
   /** How many transactions Lunch Money linked to it this period. */
   matched?: number
 }
@@ -418,12 +420,18 @@ export function aWalletPayment(options: WalletPaymentOptions): LmTransaction {
 function recurringOf(options: SubscriptionOptions, isIncome: boolean): LmRecurringItem {
   const tracked = options.tracked ?? true
   const matched = options.matched ?? 0
+  const cadence = options.cadence ?? "monthly"
   return recurringItem({
     payee: options.payee,
     amount: (isIncome ? -options.amount : options.amount).toFixed(4),
-    cadence: options.cadence ?? "monthly",
+    cadence,
     granularity: options.granularity ?? granularityFor(options.cadence),
     quantity: options.quantity ?? 1,
+    // What Lunch Money computes for the queried month. The verb derives it
+    // from the cadence so a scenario can still say "twice a month" in words,
+    // but the arithmetic reads these, exactly as production does.
+    expected_dates: options.expected ?? expectedDatesFor(cadence),
+    expected_range: { start: "2026-08-01", end: "2026-08-31" },
     is_income: isIncome,
     plaid_account_id: tracked ? 1 : null,
     asset_id: tracked ? null : 1,
@@ -440,6 +448,20 @@ function recurringOf(options: SubscriptionOptions, isIncome: boolean): LmRecurri
  * as (month, 1), identical to plain monthly — the ambiguity `perMonth` exists
  * to resolve — so it must not be special-cased away here.
  */
+/**
+ * What Lunch Money would report for the queried month.
+ *
+ * Only the count is read, and only where it exceeds the amortised rate, so
+ * these are placeholder dates rather than a real schedule — the one case that
+ * matters is twice-monthly, which reports as plain monthly otherwise.
+ */
+function expectedDatesFor(cadence: string): IsoDate[] {
+  if (cadence === "twice a month") return ["2026-08-14", "2026-08-28"]
+  if (cadence === "once a week") return ["2026-08-04", "2026-08-11", "2026-08-18", "2026-08-25"]
+  if (cadence.includes("year")) return []
+  return ["2026-08-10"]
+}
+
 function granularityFor(cadence: string | undefined): string {
   if (!cadence) return "month"
   if (cadence.includes("week")) return "week"

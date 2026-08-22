@@ -136,6 +136,8 @@ export function recurringItem(overrides: Partial<LmRecurringItem> = {}): LmRecur
     cadence: "monthly",
     granularity: "month",
     quantity: 1,
+    expected_dates: ["2026-08-10"],
+    expected_range: { start: "2026-08-01", end: "2026-08-31" },
     billing_date: "2026-08-10",
     category_id: null,
     is_income: false,

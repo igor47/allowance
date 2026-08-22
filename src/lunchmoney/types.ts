@@ -67,11 +67,36 @@ export interface LmRecurringItem {
   /** Stringified decimal. Positive is an outflow, as with transactions. */
   amount: string
   currency: string
-  /** "monthly", "twice a month", "every 3 months", "once a week", "yearly"... */
+  /**
+   * "monthly", "twice a month", "every 3 months"... **For display only.**
+   *
+   * v2 does not send this; the client renders it from `granularity` and
+   * `quantity`. Nothing may compute with it — v1's habit of pattern-matching
+   * the string is what `expected_dates` now replaces.
+   */
   cadence: string | null
-  /** "month" | "week" | "year" — with `quantity`, the machine-readable cadence. */
+  /** "day" | "week" | "month" | "year" — with `quantity`, the cadence. */
   granularity: string | null
   quantity: number | null
+  /**
+   * Every date in the queried range a charge is expected on.
+   *
+   * The only thing that separates a twice-monthly item from a monthly one:
+   * both report `granularity` "month" and `quantity` 1, and only this says the
+   * charge lands twice. Empty when the range holds no occurrence, which is the
+   * ordinary state of a yearly bill in eleven months out of twelve.
+   */
+  expected_dates: string[]
+  /**
+   * The range `expected_dates` was computed over.
+   *
+   * Load-bearing: a count of occurrences means nothing without the window it
+   * was counted in. Asked for the first three weeks of a month, a twice-monthly
+   * item reports one date and looks exactly like a monthly one — which silently
+   * halves a fortnightly salary. `perMonth()` refuses a partial range for
+   * precisely that reason.
+   */
+  expected_range: { start: string; end: string } | null
   /** Next expected billing date in the queried range, YYYY-MM-DD. */
   billing_date: string | null
   category_id: number | null

@@ -3,39 +3,105 @@ import { recurringItem as item } from "../test/factories"
 import { aWorld } from "../test/world"
 import { budgetView, decodeEntities, perMonth, stateOf } from "./budget"
 
-describe("cadence to a monthly figure", () => {
+describe("occurrences per month", () => {
+  /** A month the plan does not fire in — the ordinary state of a yearly bill. */
+  const quiet = { expected_dates: [] }
+
   test("monthly is itself", () => {
     expect(perMonth(item())).toBe(1)
   })
 
   test("twice a month is two, which granularity alone cannot say", () => {
-    // The API reports (month, 1) for this exactly as it does for plain monthly;
-    // counting it once would halve a fortnightly salary.
-    const twice = item({ cadence: "twice a month", granularity: "month", quantity: 1 })
+    // Lunch Money reports (month, 1) for this exactly as it does for plain
+    // monthly. Only the expected dates give it away, and counting it once
+    // would halve a fortnightly salary.
+    const twice = item({
+      granularity: "month",
+      quantity: 1,
+      expected_dates: ["2026-08-14", "2026-08-28"],
+    })
     expect(twice.granularity).toBe(item().granularity)
+    expect(twice.quantity).toBe(item().quantity)
     expect(perMonth(twice)).toBe(2)
   })
 
-  test("weekly is 52/12, not 4", () => {
-    expect(
-      perMonth(item({ cadence: "once a week", granularity: "week", quantity: 1 }))
-    ).toBeCloseTo(4.333, 3)
+  test("weekly amortises to 52/12 rather than to the weeks in this month", () => {
+    // Four expected dates in August, five in a month that starts on a Tuesday.
+    // Totals want the steady rate, so the amortised figure is the floor.
+    const weekly = item({
+      granularity: "week",
+      quantity: 1,
+      expected_dates: ["2026-08-04", "2026-08-11", "2026-08-18", "2026-08-25"],
+    })
+    expect(perMonth(weekly)).toBeCloseTo(4.333, 3)
   })
 
   test("every N months divides", () => {
-    expect(
-      perMonth(item({ cadence: "every 3 months", granularity: "month", quantity: 3 }))
-    ).toBeCloseTo(1 / 3, 5)
+    expect(perMonth(item({ granularity: "month", quantity: 3, ...quiet }))).toBeCloseTo(1 / 3, 5)
   })
 
-  test("yearly and twice-yearly", () => {
-    expect(perMonth(item({ cadence: "yearly", granularity: "year", quantity: 1 }))).toBeCloseTo(
-      1 / 12,
-      5
-    )
+  test("yearly and twice-yearly amortise across the months they skip", () => {
+    // A yearly bill is a twelfth of itself every month, not its whole self in
+    // one month and nothing in the other eleven.
+    expect(perMonth(item({ granularity: "year", quantity: 1, ...quiet }))).toBeCloseTo(1 / 12, 5)
+    expect(perMonth(item({ granularity: "month", quantity: 6, ...quiet }))).toBeCloseTo(1 / 6, 5)
+  })
+
+  test("a yearly bill stays amortised even in the month it lands", () => {
+    // Counting it in full here *and* a twelfth in the other eleven months
+    // would bill it 1.9 times over the year, and would drop the daily target
+    // through the floor in one month for no change in the plan.
+    const due = item({ granularity: "year", quantity: 1, expected_dates: ["2026-08-01"] })
+    expect(perMonth(due)).toBeCloseTo(1 / 12, 5)
+  })
+
+  test("more often than monthly, the expected dates win", () => {
+    // The general form of the twice-a-month case: whenever an item fires at
+    // least monthly, what Lunch Money expects beats what the cadence implies.
+    const twiceWeekly = item({
+      granularity: "week",
+      quantity: 1,
+      expected_dates: Array.from(
+        { length: 8 },
+        (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`
+      ),
+    })
+    expect(perMonth(twiceWeekly)).toBe(8)
+  })
+
+  test("a partial range cannot be trusted to count occurrences", () => {
+    // Asked for three weeks of the month, a twice-monthly item reports one
+    // date and is indistinguishable from a monthly one. Falling back to the
+    // amortised rate is wrong small; trusting the count halves a salary.
+    const truncated = item({
+      granularity: "month",
+      quantity: 1,
+      expected_dates: ["2026-08-14"],
+      expected_range: { start: "2026-08-01", end: "2026-08-22" },
+    })
+    expect(perMonth(truncated, { start: "2026-08-01", end: "2026-08-31" })).toBe(1)
+
+    // The same item, asked over the whole month, counts twice.
+    const whole = item({
+      granularity: "month",
+      quantity: 1,
+      expected_dates: ["2026-08-14", "2026-08-28"],
+      expected_range: { start: "2026-08-01", end: "2026-08-31" },
+    })
+    expect(perMonth(whole, { start: "2026-08-01", end: "2026-08-31" })).toBe(2)
+  })
+
+  test("an item with no expectations at all amortises", () => {
     expect(
-      perMonth(item({ cadence: "twice a year", granularity: "month", quantity: 6 }))
-    ).toBeCloseTo(1 / 6, 5)
+      perMonth(item({ expected_dates: [], expected_range: null }), {
+        start: "2026-08-01",
+        end: "2026-08-31",
+      })
+    ).toBe(1)
+  })
+
+  test("a daily item is a month of days", () => {
+    expect(perMonth(item({ granularity: "day", quantity: 1, ...quiet }))).toBeCloseTo(365 / 12, 3)
   })
 })
 

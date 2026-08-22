@@ -20,6 +20,7 @@ tasks run locally and anywhere else (including CI, if it ever exists).
 | `mise run check:fix` | biome `--write`, then typecheck |
 | `mise run test` | `bun test` — offline, never touches the live API |
 | `mise run smoke` | one-shot live fetch + print, to eyeball real numbers (manual) |
+| `mise run migrate:verify` | diff API v1 against v2 over one window, live (manual) |
 | `mise run publish` | build + push the image; **depends on check + test** |
 
 `publish` *depends on* `check` and `test` rather than being run after them, so an
@@ -46,6 +47,52 @@ Bootstrap 5 dark theme via CDN. No client-side build step, no bundler.
 - Routes in `src/routes/`, registered in `src/app.ts`.
 - Full pages use `c.render()`; HTMX partials use `c.html()`.
 - Components in `src/components/`, props typed with an exported interface.
+
+## The API is v2, and the client is a hydration layer
+
+`src/lunchmoney/client.ts` is the only file that knows what Lunch Money sends,
+and `v2.ts` holds the wire shapes. Everything downstream speaks `LmTransaction`
+and friends from `types.ts` — the app's own shapes, which did not change when
+the API did, which is why the domain and its tests were untouched by the
+migration.
+
+v2 **de-hydrates** the transaction. Category name, `is_income`,
+`exclude_from_totals`, the account display name and the tags are all gone from
+it, replaced by ids; the client fetches `/categories`, `/tags`,
+`/plaid_accounts` and `/manual_accounts` once, holds them for fifteen minutes,
+and joins them back. `plaidAccounts()` deliberately does *not* use that cache —
+the freshness clock and the cash figures are built from it.
+
+Three things that will catch you out:
+
+- **`include_pending=true` is required.** v2 excludes pending transactions by
+  default and v1 did not. They are money that has left, so they count the day
+  they appear; without the flag every current month quietly understates.
+- **`include_metadata=true` is required** for `plaid_metadata`, which carries
+  the posted date the statement cycles bucket on. v2 sends it as an object
+  where v1 sent a JSON string.
+- **`cadence` no longer exists.** See below.
+
+The v2 API is documented as open alpha and still subject to change, so `v2.ts`
+is the blast radius on purpose.
+
+### The cadence trap
+
+v1 sent a free-text `cadence` ("twice a month"), and `budget.ts` led on it
+because `granularity`+`quantity` reports twice-monthly as (month, 1) — identical
+to plain monthly. v2 removed the string and added
+`matches.expected_occurrence_dates`, which is better: the dates are computed
+rather than pattern-matched.
+
+`perMonth()` therefore takes the larger of the amortised rate and the observed
+count, but only for items firing at least monthly — a yearly bill stays at a
+twelfth every month rather than landing in full in one of them.
+
+**A count of occurrences is meaningless without the window it was counted in.**
+Ask for three weeks of a month and a twice-monthly item reports one date,
+indistinguishable from monthly, which halves a fortnightly salary. `perMonth()`
+refuses a partial range and falls back to amortising, which is wrong small
+rather than wrong invisibly. `LmRecurringItem.expected_range` is what it checks.
 
 ## No database
 

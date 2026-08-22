@@ -61,6 +61,7 @@ export interface BudgetView {
 }
 
 const WEEKS_PER_MONTH = 52 / 12
+const DAYS_PER_MONTH = 365 / 12
 
 /**
  * Lunch Money returns payees HTML-escaped — "PG&amp;E", "Serena&#x27;s Gym" —
@@ -85,24 +86,71 @@ export function decodeEntities(text: string): string {
 /**
  * Occurrences per month.
  *
- * `cadence` leads because `granularity`+`quantity` cannot express "twice a
- * month" — it arrives as (month, 1), identical to plain monthly, and counting
- * a fortnightly salary once would halve the household's income.
+ * Two sources, and the larger wins.
+ *
+ * `granularity` and `quantity` give the *amortised* rate, which is what totals
+ * want: a yearly bill is a twelfth of itself every month, not its whole self in
+ * one month and nothing in the other eleven. That is the floor.
+ *
+ * `expected_dates` gives what Lunch Money actually expects inside the queried
+ * range, and it is the only thing that can say "twice a month" — that arrives
+ * as (month, 1), indistinguishable from plain monthly, and counting a
+ * fortnightly salary once would halve the household's income. It used to be
+ * read off v1's free-text `cadence` string; v2 removed the string and added
+ * the dates, which are better because they are computed rather than matched.
+ *
+ * The observed count is consulted only for items that fire at least monthly,
+ * and only when it is the larger. That is exactly where `granularity` can be
+ * wrong and never where amortising matters: a weekly item predicts 4.33 and
+ * observes 4 or 5 by the month, so it stays at 4.33; the fortnightly salary
+ * predicts 1, observes 2, and is counted twice.
+ *
+ * Anything rarer than monthly is always amortised, whatever the range holds.
+ * Letting a yearly bill count in full in the month it lands *and* a twelfth in
+ * the other eleven would bill it 1.9 times over the year, and would drop the
+ * daily target through the floor in one month for no change in the plan.
+ *
+ * A count of occurrences means nothing without the window it was counted in,
+ * so the observed count is used only when `expected_range` covers the whole
+ * period being totalled. Asked for three weeks of a month, a twice-monthly item
+ * reports one date and is indistinguishable from a monthly one — which halves a
+ * fortnightly salary, silently, and did exactly that the first time this rule
+ * met a real query. A partial range falls back to the amortised rate, which is
+ * wrong in a small and predictable direction rather than a large invisible one.
  */
-export function perMonth(item: LmRecurringItem): number {
-  const cadence = (item.cadence ?? "").toLowerCase().trim()
-  if (cadence === "twice a month") return 2
-  if (cadence === "twice a year") return 2 / 12
-
+export function perMonth(item: LmRecurringItem, period?: { start: IsoDate; end: IsoDate }): number {
   const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1
+  let amortised: number
   switch (item.granularity) {
+    case "day":
+      amortised = DAYS_PER_MONTH / quantity
+      break
     case "week":
-      return WEEKS_PER_MONTH / quantity
+      amortised = WEEKS_PER_MONTH / quantity
+      break
     case "year":
-      return 1 / (12 * quantity)
+      amortised = 1 / (12 * quantity)
+      break
     default:
-      return 1 / quantity
+      amortised = 1 / quantity
   }
+  if (amortised < 1) return amortised
+  if (!covers(item.expected_range, period)) return amortised
+  return Math.max(amortised, item.expected_dates?.length ?? 0)
+}
+
+/**
+ * Whether the expectations were computed over at least the period being
+ * totalled. No period asked for means the caller is stating one implicitly —
+ * which is what a unit test does, and what `budgetView` never does.
+ */
+function covers(
+  range: LmRecurringItem["expected_range"],
+  period?: { start: IsoDate; end: IsoDate }
+): boolean {
+  if (!period) return true
+  if (!range) return false
+  return range.start <= period.start && range.end >= period.end
 }
 
 export function stateOf(item: LmRecurringItem, today: IsoDate): CommitmentState {
@@ -114,14 +162,18 @@ export function stateOf(item: LmRecurringItem, today: IsoDate): CommitmentState 
   return missing.some((d) => d <= today) ? "overdue" : "upcoming"
 }
 
-function commitmentOf(item: LmRecurringItem, today: IsoDate): Commitment {
+function commitmentOf(
+  item: LmRecurringItem,
+  today: IsoDate,
+  period: { start: IsoDate; end: IsoDate }
+): Commitment {
   const amount = Math.abs(Number.parseFloat(item.amount))
   return {
     id: item.id,
     payee: decodeEntities(item.payee?.trim() || item.description?.trim() || "unnamed"),
     description: item.description ? decodeEntities(item.description) : null,
     amount,
-    monthly: amount * perMonth(item),
+    monthly: amount * perMonth(item, period),
     cadence: item.cadence ?? "monthly",
     state: stateOf(item, today),
     missing: item.missing_dates_within_range ?? [],
@@ -137,7 +189,7 @@ export function budgetView(items: LmRecurringItem[], today: IsoDate): BudgetView
   const periodEnd = endOfMonth(today)
   const days = Number.parseInt(periodEnd.slice(8), 10)
 
-  const all = items.map((item) => commitmentOf(item, today))
+  const all = items.map((item) => commitmentOf(item, today, { start: periodStart, end: periodEnd }))
   const income = all.filter((_, i) => items[i]?.is_income).sort(byMonthly)
   const commitments = all.filter((_, i) => !items[i]?.is_income).sort(byMonthly)
 

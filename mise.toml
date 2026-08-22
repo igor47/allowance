@@ -58,3 +58,7 @@ run = "bun run scripts/publish-purr.ts"
 description = "Ship the image to purr and reload the container there"
 depends = ["publish:purr"]
 run = "bun run scripts/deploy.ts"
+
+[tasks."migrate:verify"]
+description = "Diff v1 against v2 over the same window, live (manual only)"
+run = "bun run live/differential.ts"

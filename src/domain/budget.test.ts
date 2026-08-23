@@ -195,6 +195,62 @@ describe("the plan, totalled", () => {
     expect(view.income.map((i) => i.payee)).toEqual(["Payroll", "Rent Received"])
   })
 
+  test("what lands this month is a different figure from the monthly rate", () => {
+    // The case the whole distinction exists for: an annual bill is a twelfth
+    // of itself in `monthly` every month, and its whole self in the one month
+    // it is actually due.
+    const annual = budgetView(
+      [
+        item({
+          payee: "Car Insurance",
+          amount: "1200.0000",
+          granularity: "year",
+          quantity: 1,
+          expected_dates: ["2026-08-18"],
+        }),
+      ],
+      "2026-08-16"
+    )
+    const [insurance] = annual.commitments
+    expect(insurance?.monthly).toBeCloseTo(100, 5)
+    expect(insurance?.dueThisPeriod).toBe(1_200)
+    expect(annual.totals.committed).toBeCloseTo(100, 5)
+    expect(annual.totals.committedThisPeriod).toBe(1_200)
+  })
+
+  test("a month the bill skips is zero, not a twelfth", () => {
+    const quietMonth = budgetView(
+      [
+        item({
+          payee: "Car Insurance",
+          amount: "1200.0000",
+          granularity: "year",
+          quantity: 1,
+          expected_dates: [],
+          expected_range: { start: "2026-09-01", end: "2026-09-30" },
+        }),
+      ],
+      "2026-09-16"
+    )
+    // Still amortised in the headline, so the daily target does not move...
+    expect(quietMonth.totals.committed).toBeCloseTo(100, 5)
+    // ...and nothing actually leaves.
+    expect(quietMonth.totals.committedThisPeriod).toBe(0)
+  })
+
+  test("an untrustworthy range makes the whole period total unknown", () => {
+    // A partial sum presented as a whole one is worse than not showing one.
+    const partial = budgetView(
+      [
+        item({ expected_range: { start: "2026-08-01", end: "2026-08-20" } }),
+        item({ payee: "Rent", amount: "2000.0000" }),
+      ],
+      "2026-08-16"
+    )
+    expect(partial.totals.committed).toBeCloseTo(2_010, 5)
+    expect(partial.totals.committedThisPeriod).toBeNull()
+  })
+
   test("payees are decoded for display", () => {
     const escaped = budgetView([item({ payee: "PG&amp;E" })], "2026-08-16")
     expect(escaped.commitments.map((c) => c.payee)).toContain("PG&E")

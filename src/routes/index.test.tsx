@@ -509,6 +509,37 @@ describe("budget page", () => {
     expect(page.summary).toContain("$1,620")
   })
 
+  test("says what actually lands this month, beside the steady rate", async () => {
+    // An annual bill is a twelfth of itself in the monthly column and its
+    // whole self in the month it is due. The headline stays amortised so the
+    // daily target does not lurch; this is the other question worth asking.
+    const world = withAPlan().subscription({
+      payee: "Car Insurance",
+      amount: 1_200,
+      cadence: "yearly",
+      expected: ["2026-08-18"],
+    })
+    const page = await visit(world).budget()
+    expect(page.summary).toContain("$1,720") // committed: $1,620 + $100 amortised
+    expect(page.summary).toContain("due Aug")
+    const insurance = page.rates.find((r) => r.payee === "Car Insurance")
+    expect(insurance?.monthly).toBe("$100")
+    expect(insurance?.dueThisPeriod).toBe("$1,200")
+    expect(insurance?.dates).toBe("8/18")
+
+    // A monthly item says the same thing in both columns, so the extra one
+    // only ever earns its place where the two genuinely disagree.
+    const mortgage = page.rates.find((r) => r.payee === "Mortgage")
+    expect(mortgage?.dueThisPeriod).toBe("$1,500")
+  })
+
+  test("stays quiet in an ordinary month, where the two figures agree", async () => {
+    // Most months land within a few dollars of the steady rate, and a second
+    // total that close to the first is noise dressed as information.
+    const page = await visit(withAPlan()).budget()
+    expect(page.summary).not.toContain("due Aug")
+  })
+
   test("says how much is committed on accounts with no transaction feed", async () => {
     expect((await visit(withAPlan()).budget()).summary).toContain("$120 untracked")
   })

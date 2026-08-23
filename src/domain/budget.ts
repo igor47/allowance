@@ -36,6 +36,18 @@ export interface Commitment {
   state: CommitmentState
   /** Expected dates in this period with nothing linked. */
   missing: IsoDate[]
+  /** Every date this period a charge is expected on. */
+  expected: IsoDate[]
+  /**
+   * What actually lands in this period — `amount` times the occurrences
+   * expected in it, which is a different question from `monthly`.
+   *
+   * A yearly bill is a twelfth of itself in `monthly` every month, and its
+   * whole self here in the one month it is due. Null when the expectations
+   * were computed over a range that does not cover the period, because then
+   * the count means nothing. See `perMonth`.
+   */
+  dueThisPeriod: number | null
   matched: number
   tracked: boolean
 }
@@ -49,8 +61,17 @@ export interface BudgetView {
   totals: {
     /** Expected income for the month. */
     income: number
-    /** Everything committed before any discretionary decision. */
+    /** Everything committed before any discretionary decision, amortised. */
     committed: number
+    /**
+     * What is actually due in this period, rather than the steady rate.
+     *
+     * The two answer different questions and both are worth having: the daily
+     * target should not lurch because an annual bill happens to land this
+     * month, but "can we afford this month" wants the real figure. Null when
+     * any commitment's expectations could not be trusted for the period.
+     */
+    committedThisPeriod: number | null
     /** Committed on accounts with no feed — real money, invisible in transactions. */
     untracked: number
     /** income − committed. What is left to spend day to day. */
@@ -177,6 +198,10 @@ function commitmentOf(
     cadence: item.cadence ?? "monthly",
     state: stateOf(item, today),
     missing: item.missing_dates_within_range ?? [],
+    expected: item.expected_dates ?? [],
+    dueThisPeriod: covers(item.expected_range, period)
+      ? amount * (item.expected_dates?.length ?? 0)
+      : null,
     matched: (item.transactions_within_range ?? []).length,
     tracked: !!item.plaid_account_id,
   }
@@ -197,6 +222,11 @@ export function budgetView(items: LmRecurringItem[], today: IsoDate): BudgetView
   const incomeTotal = sum(income)
   const committed = sum(commitments)
   const pool = incomeTotal - committed
+  // One untrustworthy row makes the whole total untrustworthy; a partial sum
+  // presented as a whole one is worse than not showing it.
+  const committedThisPeriod = commitments.some((c) => c.dueThisPeriod === null)
+    ? null
+    : commitments.reduce((total, c) => total + (c.dueThisPeriod ?? 0), 0)
 
   return {
     periodStart,
@@ -207,6 +237,7 @@ export function budgetView(items: LmRecurringItem[], today: IsoDate): BudgetView
     totals: {
       income: incomeTotal,
       committed,
+      committedThisPeriod,
       untracked: sum(commitments.filter((c) => !c.tracked)),
       pool,
       dailyTarget: pool / days,

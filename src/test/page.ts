@@ -226,6 +226,22 @@ export class BudgetPage extends Page {
   get payees(): string[] {
     return this.commitments.map((c) => c.payee)
   }
+
+  /** Per-row: the amortised rate, and what actually lands this month. */
+  get rates(): { payee: string; monthly: string; dueThisPeriod: string; dates: string }[] {
+    return all(this.doc, "#budget tbody tr").map((tr) => {
+      const cells = all(tr, "td")
+      const due = cells[4]
+      // The cell holds the amount, then a small line naming the dates.
+      const dates = due?.querySelector(".small")
+      return {
+        payee: text(tr.querySelector("td")),
+        monthly: text(cells[3]),
+        dueThisPeriod: text(due).replace(text(dates), "").trim(),
+        dates: text(dates),
+      }
+    })
+  }
 }
 
 /** What comes back from a tag click: the row, plus the summary swapped out of band. */

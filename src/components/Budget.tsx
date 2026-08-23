@@ -8,7 +8,7 @@
  */
 
 import type { BudgetView, Commitment, CommitmentState } from "../domain/budget"
-import { money } from "./format"
+import { money, shortDate } from "./format"
 
 export interface BudgetProps {
   budget: BudgetView
@@ -49,6 +49,27 @@ const Row = ({ c }: { c: Commitment }) => {
           money(c.monthly)
         )}
       </td>
+      <td class="text-end tabular">
+        {/*
+          What actually lands this month, which is the figure `monthly` hides:
+          an annual bill is a twelfth of itself there and its whole self here,
+          in the one month it is due.
+        */}
+        {c.dueThisPeriod === null || c.expected.length === 0 ? (
+          <span class="text-secondary" title="Nothing expected this month">
+            —
+          </span>
+        ) : (
+          <>
+            {money(c.dueThisPeriod)}
+            <div class="small text-secondary" title={c.expected.join(", ")}>
+              {c.expected.length <= 2
+                ? c.expected.map(shortDate).join(", ")
+                : `${c.expected.length} dates`}
+            </div>
+          </>
+        )}
+      </td>
       <td class="text-end">
         <span class={`badge ${state.class}`} title={state.note}>
           {state.label}
@@ -71,6 +92,7 @@ const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
                 <th>Cadence</th>
                 <th class="text-end">Each</th>
                 <th class="text-end">Per month</th>
+                <th class="text-end">Due this month</th>
                 <th class="text-end">State</th>
               </tr>
             </thead>
@@ -88,6 +110,19 @@ const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
 export const Budget = ({ budget, configuredTarget }: BudgetProps) => {
   const { totals } = budget
   const drift = totals.dailyTarget - configuredTarget
+  const monthName = new Date(`${budget.periodStart}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  })
+  /*
+   * Worth saying only when the month is genuinely heavier or lighter than the
+   * steady rate. Most months land within a few dollars of it, and printing a
+   * second total that close to the first is noise dressed as information.
+   * Relative rather than fixed, so it scales with the size of the plan.
+   */
+  const lumpy =
+    totals.committedThisPeriod !== null &&
+    Math.abs(totals.committedThisPeriod - totals.committed) > Math.abs(totals.committed) * 0.01
   const overdue = budget.commitments.filter((c) => c.state === "overdue").length
 
   return (
@@ -123,6 +158,20 @@ export const Budget = ({ budget, configuredTarget }: BudgetProps) => {
                 <div>
                   <div class="stat-label text-secondary">Committed</div>
                   <div class="fs-5 tabular">{money(totals.committed)}</div>
+                  {/*
+                    The headline stays amortised, because a daily allowance
+                    should not lurch when an annual bill happens to land this
+                    month. This says what actually leaves, which is the other
+                    question worth asking and a different number.
+                  */}
+                  {totals.committedThisPeriod !== null && lumpy ? (
+                    <div
+                      class="small text-secondary"
+                      title="What actually lands this month, rather than the steady monthly rate"
+                    >
+                      {money(totals.committedThisPeriod)} due {monthName}
+                    </div>
+                  ) : null}
                   {totals.untracked > 0 ? (
                     <div
                       class="small text-secondary"

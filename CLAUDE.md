@@ -94,6 +94,13 @@ indistinguishable from monthly, which halves a fortnightly salary. `perMonth()`
 refuses a partial range and falls back to amortising, which is wrong small
 rather than wrong invisibly. `LmRecurringItem.expected_range` is what it checks.
 
+The same dates give the budget page a second, genuinely different figure:
+`totals.committed` is the steady monthly rate and `totals.committedThisPeriod`
+is what actually lands in the month on screen. The headline daily target is
+built from the amortised one on purpose — an allowance should not lurch because
+an annual bill happens to fall this month — and the actual figure is shown
+beside it only when the month is materially heavier or lighter.
+
 ## No database
 
 Lunch Money is the store. There is no SQLite, no migrations, no volume, no

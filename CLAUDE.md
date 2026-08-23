@@ -154,6 +154,68 @@ order of magnitude. See `ACCOUNT_POLICY` in `src/domain/policy.ts`, whose values
 say what an account *is* (`spending`, `fixed`, `ignore`), not which way its
 default falls.
 
+### Transfers are matched, not recognised
+
+Money moving between two accounts we own is caught by `findTransfers()`, which
+asks a structural question — is there an equal and opposite amount in another
+account within three days? — rather than asking whether a payee looks like a
+transfer. That subsumes the card autopay, the Venmo cashout and a plain
+bank-to-bank move under one rule that names no bank, which is most of what made
+`policy.ts` unshippable to anyone else.
+
+**Classification therefore goes through `classifyAll()`, not `classify()`.**
+Whether a row is a transfer is a property of the *set*; `classify()` still takes
+one transaction so the domain tests can, and silently loses only this rule.
+
+Three things it deliberately will not do:
+
+- **A match must be unambiguous in both directions.** A leg with two possible
+  partners matches neither. Ambiguity falls back to asking a human rather than
+  to ignoring money.
+- **Amounts must agree to the cent**, so a transfer that charges a fee — Venmo's
+  instant option takes ~1.75% — falls through to the payee rules and counts.
+  Wrong small rather than wrong invisibly, as with `perMonth()`.
+- **Structure alone is not enough.** A $300 restaurant charge and a $300 cheque
+  three days later meet every arithmetic condition and are two separate things,
+  so one leg must also read as a transfer to `looksLikeTransfer()`. That
+  function may never drop a row on its own — a real charge a month lands in
+  "Payment, Transfer" — but the same category *on a row that also has an equal
+  and opposite partner elsewhere* is a much stronger claim.
+
+Matching cannot catch a movement whose far side is not in Lunch Money, and the
+answer to that is **the `transfer` tag**, not a cleverer pattern. There used to
+be a `^venmo$` rule that ignored every bank row paid to Venmo; it was deleted
+because those rows are ambiguous in a way no pattern can resolve. `Checking
+→ Wallet` is a transfer — the wallet is tracked, so the spend lands there
+and counting the bank row too would double it. `Savings → Serena's Venmo`
+is a spend — that wallet is not in Lunch Money, so the bank row is the only
+record there will ever be. Identical payee, identical category, opposite
+meaning. They go to review, and a human says which.
+
+Structural verdicts — untracked account, zero amount, matched pair — sit *above*
+the tag block and beat it, because they are facts rather than readings. The
+exception is `spending`, the only tag that can put money back into the count and
+the escape hatch reimbursements depend on. Everything below the tag block is a
+guess about a payee, and a tag still wins there.
+
+### `transfer` and `ignored` are different, and the difference is reachability
+
+Everything in `transfer` got there by inference — a matched pair, a payee that
+reads as an autopay, a Fidelity core sweep — so **every row in it stays
+taggable**. An inferred verdict that cannot be corrected from the list is a
+one-way door: before the split, a wrongly-ignored row could only be fixed in
+Lunch Money's own app, which is exactly the trap the pairing rule made more
+likely by making a wrong ignore possible at all.
+
+`ignored` is now only the two cases no tag could change: an account we do not
+track (checked before the tags, so a button there would do nothing) and a
+zero-amount row. It is the one bucket that renders no buttons, and now that is
+a statement rather than an accident.
+
+Transfers are excluded from `needsReview()`, from `summarise()` — summing both
+legs would double the money — and from the deposits filter, where a cashout
+landing or an autopay's card credit would otherwise read as money coming back.
+
 ## Testing
 
 Offline, always, and entirely synthetic. There is no recorded data anywhere in

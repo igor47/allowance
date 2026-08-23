@@ -10,7 +10,7 @@
 import type { AllowanceConfig } from "../config"
 import type { LmTransaction } from "../lunchmoney/types"
 import { daysBetween, eachDay, endOfMonth, type IsoDate, startOfMonth } from "./dates"
-import { type Classification, classify } from "./policy"
+import { type Classification, classify, findTransfers } from "./policy"
 
 export interface DayRow {
   date: IsoDate
@@ -62,8 +62,16 @@ export interface ClassifiedTransaction {
   classification: Classification
 }
 
+/**
+ * The entry point classification is meant to go through, because whether a
+ * transaction is an internal transfer is a property of the *set* rather than of
+ * the row — see `findTransfers()`. Pass the widest window available: a leg
+ * whose other half falls outside it cannot be matched, so a transfer made today
+ * counts as spend until tomorrow's fetch brings its partner in.
+ */
 export function classifyAll(txns: LmTransaction[]): ClassifiedTransaction[] {
-  return txns.map((txn) => ({ txn, classification: classify(txn) }))
+  const transfers = findTransfers(txns)
+  return txns.map((txn) => ({ txn, classification: classify(txn, transfers) }))
 }
 
 export function computeAllowance(

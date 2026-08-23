@@ -14,7 +14,7 @@
 
 import type { Config } from "../config"
 import { config as baseConfig } from "../config"
-import type { IsoDate } from "../domain/dates"
+import { addDays, type IsoDate } from "../domain/dates"
 import { CHASE, IGOR_PERSONAL, type KnownAccount, VENMO } from "../domain/policy"
 import type { LmPlaidAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
 import { account, metadata, recurringItem, type TxnOverrides, txn } from "./factories"
@@ -95,6 +95,34 @@ export interface SweepOptions {
   on: IsoDate
   amount: number
   account?: KnownAccount
+}
+
+export interface TransferOptions {
+  /** The day the money leaves `from`. */
+  on: IsoDate
+  /** Dollars. Positive is money leaving, as on every verb. */
+  amount: number
+  from: KnownAccount
+  to: KnownAccount
+  /** Days the far leg takes to land. One, as the real feeds report it. */
+  settles?: number
+  /**
+   * Payees, when a test cares. The defaults deliberately match none of the
+   * payee rules in `policy.ts`, so a scenario that passes proves the pairing
+   * did the work rather than a regex quietly doing it first.
+   */
+  fromPayee?: string
+  toPayee?: string
+  fromTags?: string[]
+  toTags?: string[]
+}
+
+export interface CashoutOptions {
+  /** The day the wallet reports it. The bank lands it `settles` days later. */
+  on: IsoDate
+  amount: number
+  into?: KnownAccount
+  settles?: number
 }
 
 export interface WalletPaymentOptions {
@@ -236,9 +264,27 @@ export class WorldBuilder implements World {
     return this
   }
 
+  /**
+   * Money moved between two accounts we own, as both feeds report it: leaving
+   * one on the day named, arriving in the other a day or two later.
+   */
+  transfer(options: TransferOptions): this {
+    this.transactions.push(...aTransfer(options))
+    return this
+  }
+
   /** Topping the wallet up, or emptying it back into the bank. */
   walletTransfer(options: SweepOptions): this {
     this.transactions.push(aWalletTransfer(options))
+    return this
+  }
+
+  /**
+   * Emptying the wallet back into the bank — the case that motivated the
+   * pairing rule. Both legs, exactly as the two feeds report them.
+   */
+  walletCashout(options: CashoutOptions): this {
+    this.transactions.push(...aWalletCashout(options))
     return this
   }
 
@@ -272,12 +318,6 @@ function money(amount: number): string {
 
 function accountFields(name: KnownAccount): Partial<LmTransaction> {
   return { account_display_name: name, plaid_account_display_name: name, asset_display_name: null }
-}
-
-function addOneDay(date: IsoDate): IsoDate {
-  const dt = new Date(`${date}T00:00:00Z`)
-  dt.setUTCDate(dt.getUTCDate() + 1)
-  return dt.toISOString().slice(0, 10)
 }
 
 /**
@@ -358,7 +398,7 @@ export function anAutopay(options: AutopayOptions): LmTransaction {
  */
 export function anAutopayDebit(options: AutopayOptions): LmTransaction {
   return txn({
-    date: options.debitedOn ?? addOneDay(options.on),
+    date: options.debitedOn ?? addDays(options.on, 1),
     amount: money(options.amount),
     payee: "DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)",
     original_name: "DIRECT DEBIT CHASE CREDIT CAUTOPAY",
@@ -387,9 +427,45 @@ export function aSweep(options: SweepOptions): LmTransaction {
 }
 
 /**
- * Topping the wallet up, or emptying it back. Appears only on the bank side,
- * with a payee of exactly "Venmo" — no name, no memo, which is the entire
- * basis of the rule that catches it.
+ * Both legs of one movement between accounts we own.
+ *
+ * Nothing about either row says "transfer" to any payee rule — what makes them
+ * one movement is that they are equal, opposite, in different accounts and a
+ * day apart, which is exactly what `findTransfers()` looks for.
+ */
+export function aTransfer(options: TransferOptions): [LmTransaction, LmTransaction] {
+  const leaving = options.fromPayee ?? "Standard transfer"
+  const arriving = options.toPayee ?? "Transfer"
+  return [
+    txn({
+      date: options.on,
+      amount: money(options.amount),
+      payee: leaving,
+      original_name: leaving.toUpperCase(),
+      category_name: "Payment, Transfer",
+      exclude_from_totals: true,
+      ...accountFields(options.from),
+      tags: options.fromTags ?? [],
+    }),
+    txn({
+      date: addDays(options.on, options.settles ?? 1),
+      amount: money(-options.amount),
+      payee: arriving,
+      original_name: arriving.toUpperCase(),
+      category_name: "Payment, Transfer",
+      exclude_from_totals: true,
+      ...accountFields(options.to),
+      tags: options.toTags ?? [],
+    }),
+  ]
+}
+
+/**
+ * The bank side of topping the wallet up, or emptying it back: a payee of
+ * exactly "Venmo", no name, no memo, which is the entire basis of the rule that
+ * catches it. A top-up appears here and nowhere else, which is why it is still
+ * the payee rather than a matching leg that has to catch it. A cashout also
+ * posts a wallet row — see `aWalletCashout()`.
  */
 export function aWalletTransfer(options: SweepOptions): LmTransaction {
   return txn({
@@ -400,6 +476,34 @@ export function aWalletTransfer(options: SweepOptions): LmTransaction {
     category_name: "Payment, Transfer",
     ...accountFields(options.account ?? IGOR_PERSONAL),
   })
+}
+
+/**
+ * A cashout, both legs, with the payees the real feeds actually use.
+ *
+ * The wallet leg is the awkward one: it lands on a `spending` account under a
+ * payee no rule recognises, so before it was matched to its other half it read
+ * as several hundred dollars of discretionary spend.
+ */
+export function aWalletCashout(options: CashoutOptions): [LmTransaction, LmTransaction] {
+  const into = options.into ?? IGOR_PERSONAL
+  return [
+    txn({
+      date: options.on,
+      amount: money(options.amount),
+      payee: "Standard transfer",
+      original_name: "STANDARD TRANSFER",
+      category_name: "Payment, Transfer",
+      exclude_from_totals: true,
+      ...accountFields(VENMO),
+      institution_name: "Venmo - Personal",
+    }),
+    aWalletTransfer({
+      on: addDays(options.on, options.settles ?? 1),
+      amount: -options.amount,
+      account: into,
+    }),
+  ]
 }
 
 /** Paying a person from the wallet. Counts, the way a card charge does. */

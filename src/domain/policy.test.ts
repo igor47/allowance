@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { txn } from "../test/factories"
+import type { LmTransaction } from "../lunchmoney/types"
+import { tag, txn } from "../test/factories"
 import {
   aCharge,
   aDeposit,
@@ -7,17 +8,19 @@ import {
   anAutopayDebit,
   aRefund,
   aSweep,
+  aTransfer,
+  aWalletCashout,
   aWalletPayment,
-  aWalletTransfer,
 } from "../test/world"
 import {
   CHASE,
   CHASE_UNITED,
   classify,
   FIDELITY_JOINT,
+  findTransfers,
   IGOR_PERSONAL,
-  looksLikeSettlement,
   unknownAccounts,
+  VENMO,
 } from "./policy"
 
 describe("account policy", () => {
@@ -123,7 +126,6 @@ describe("negative amounts", () => {
     // the flag alone is not enough to catch these.
     const payment = anAutopay({ on: "2026-07-09", amount: 9000, category: "Income" })
     expect(classify(payment).counts).toBe(false)
-    expect(looksLikeSettlement(payment)).toBe(true)
   })
 
   test("deposits into a fixed-cost account never count", () => {
@@ -140,7 +142,7 @@ describe("negative amounts", () => {
     // It is the card bill being paid, not spending, and it should never appear
     // in the queue — where a five-figure row would be the loudest thing there.
     const result = classify(anAutopayDebit({ on: "2026-08-09", amount: 9000, from: IGOR_PERSONAL }))
-    expect(result.bucket).toBe("ignored")
+    expect(result.bucket).toBe("transfer")
     expect(result.counts).toBe(false)
   })
 
@@ -225,13 +227,13 @@ describe("reimbursements", () => {
 
   test("the sweep that pairs with it is not a deposit", () => {
     const sweep = classify(aSweep({ on: "2026-08-07", amount: 154, account: IGOR_PERSONAL }))
-    expect(sweep.bucket).toBe("ignored")
+    expect(sweep.bucket).toBe("transfer")
     expect(sweep.reason).toBe("internal account sweep")
   })
 
   test("payroll and transfers are not reimbursements by default", () => {
     expect(classify(aCheque({ payee: "DIRECT DEPOSIT PAYROLL" })).counts).toBe(false)
-    expect(classify(aSweep({ on: "2026-08-07", amount: -154 })).bucket).toBe("ignored")
+    expect(classify(aSweep({ on: "2026-08-07", amount: -154 })).bucket).toBe("transfer")
   })
 })
 
@@ -274,24 +276,23 @@ describe("the wallet", () => {
     expect(classify(dinner).bucket).toBe("spending")
   })
 
-  test("funding the wallet is a transfer, on the bank side where it appears", () => {
-    // The wallet reports only its own person-to-person half, so the top-up
-    // shows up once, on the bank statement, as a payee of exactly "Venmo".
+  test("funding the wallet from the bank is a question, not an answer", () => {
+    // `^venmo$` used to ignore these outright. It could not tell Igor's wallet
+    // (tracked, so the spend lands there) from Serena's (not tracked, so this
+    // row is the only record) — same payee, same category, opposite meaning.
+    // Only a human knows, so it goes to review instead of being swallowed.
     const topUp = classify(
-      aWalletTransfer({ on: "2026-08-02", amount: 150, account: FIDELITY_JOINT })
+      aCharge({
+        on: "2026-08-02",
+        amount: 150,
+        account: FIDELITY_JOINT,
+        payee: "Venmo",
+        category: "Payment, Transfer",
+      })
     )
     expect(topUp.counts).toBe(false)
-    expect(topUp.reason).toBe("moving money in or out of the wallet")
-
-    const cashOut = aWalletTransfer({ on: "2026-08-03", amount: -150, account: IGOR_PERSONAL })
-    expect(classify(cashOut).counts).toBe(false)
-  })
-
-  test("a person's name is never mistaken for the wallet itself", () => {
-    // Bank rows say exactly "Venmo" and wallet rows never do, which is the
-    // whole basis of the rule above.
-    const fromAFriend = aWalletPayment({ on: "2026-08-05", amount: -20, payee: "A Friend" })
-    expect(classify(fromAFriend).counts).toBe(true)
+    expect(topUp.bucket).toBe("unclassified")
+    expect(topUp.taggable).toBe(true)
   })
 
   test("a loan repaid is neither spend nor refund once tagged", () => {
@@ -310,5 +311,218 @@ describe("the wallet", () => {
     expect(classify(lent).counts).toBe(false)
     expect(classify(repaid).counts).toBe(false)
     expect(classify(repaid).bucket).toBe("irregular")
+  })
+})
+
+/**
+ * Matching two legs to each other, which is the only rule here that asks a
+ * question about the set rather than about one row's payee.
+ */
+const verdictsFor = (txns: LmTransaction[]) => {
+  const transfers = findTransfers(txns)
+  return txns.map((t) => classify(t, transfers))
+}
+
+describe("transfers between accounts we own", () => {
+  const verdicts = verdictsFor
+
+  test("both legs of a bank-to-bank move are transfers, on no payee at all", () => {
+    const legs = aTransfer({
+      on: "2026-08-10",
+      amount: 2000,
+      from: IGOR_PERSONAL,
+      to: FIDELITY_JOINT,
+    })
+    const [out, into] = verdicts(legs)
+    expect(out?.bucket).toBe("transfer")
+    expect(into?.bucket).toBe("transfer")
+    // The reason names the other half, so a row explains itself in the list.
+    expect(out?.reason).toContain(FIDELITY_JOINT)
+    expect(into?.reason).toContain(IGOR_PERSONAL)
+  })
+
+  test("emptying the wallet into the bank is no longer discretionary spend", () => {
+    // The regression this rule exists for. The wallet leg lands on a spending
+    // account under a payee no rule recognises, and counted in full.
+    const legs = aWalletCashout({ on: "2026-08-20", amount: 400, into: IGOR_PERSONAL })
+    const [wallet, bank] = verdicts(legs)
+    expect(wallet?.counts).toBe(false)
+    expect(wallet?.bucket).toBe("transfer")
+    expect(bank?.bucket).toBe("transfer")
+
+    // ...and on its own, with nothing to match against, it still counts.
+    const alone = classify(legs[0])
+    expect(alone.counts).toBe(true)
+  })
+
+  test("a transfer that charges a fee does not match, and is wrong small", () => {
+    // Venmo's instant option takes about 1.75%, so the amounts disagree. The
+    // wallet leg falls through and counts — visibly, in the review queue.
+    const legs = aWalletCashout({ on: "2026-08-20", amount: 400 })
+    const shaved = [legs[0], { ...legs[1], amount: "-393.00" }]
+    const [wallet] = verdicts(shaved)
+    expect(wallet?.counts).toBe(true)
+  })
+
+  test("two possible partners match nothing, rather than matching one", () => {
+    const transfer = { category: "Payment, Transfer" }
+    const legs = [
+      aCharge({
+        on: "2026-08-10",
+        amount: 400,
+        account: VENMO,
+        payee: "Standard transfer",
+        ...transfer,
+      }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: IGOR_PERSONAL, ...transfer }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: FIDELITY_JOINT, ...transfer }),
+    ]
+    expect(findTransfers(legs).size).toBe(0)
+    const [wallet] = verdicts(legs)
+    expect(wallet?.counts).toBe(true)
+  })
+
+  test("a partner courted twice matches neither suitor", () => {
+    const transfer = { category: "Payment, Transfer" }
+    const legs = [
+      aCharge({
+        on: "2026-08-10",
+        amount: 400,
+        account: VENMO,
+        payee: "Standard transfer",
+        ...transfer,
+      }),
+      aCharge({
+        on: "2026-08-10",
+        amount: 400,
+        account: FIDELITY_JOINT,
+        payee: "A Move",
+        ...transfer,
+      }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: IGOR_PERSONAL, ...transfer }),
+    ]
+    expect(findTransfers(legs).size).toBe(0)
+  })
+
+  test("matching does not depend on the order the transactions arrive in", () => {
+    const legs = aTransfer({ on: "2026-08-10", amount: 2000, from: IGOR_PERSONAL, to: VENMO })
+    expect(findTransfers(legs).size).toBe(2)
+    expect(findTransfers([...legs].reverse()).size).toBe(2)
+  })
+
+  test("a leg that lands outside the window is not matched", () => {
+    const legs = aTransfer({
+      on: "2026-08-10",
+      amount: 2000,
+      from: IGOR_PERSONAL,
+      to: FIDELITY_JOINT,
+      settles: 4,
+    })
+    expect(findTransfers(legs).size).toBe(0)
+  })
+
+  test("opposite rows within one account are not a transfer", () => {
+    // Fidelity's core sweep is equal, opposite and filed as a transfer, but it
+    // goes nowhere. Only the two-account rule separates it from a real move.
+    const rows = aTransfer({
+      on: "2026-08-10",
+      amount: 400,
+      from: IGOR_PERSONAL,
+      to: IGOR_PERSONAL,
+    })
+    expect(findTransfers(rows).size).toBe(0)
+    const [out] = verdicts(rows)
+    expect(out?.bucket).toBe("unclassified")
+  })
+
+  test("equal and opposite is not enough: it must also read as a transfer", () => {
+    // The false match this rule was caught making. A restaurant charge and a
+    // cheque three days later satisfy every arithmetic condition and are two
+    // separate things, so structure alone may not ignore either one.
+    const rows = [
+      aCharge({ on: "2026-08-08", amount: 300, payee: "A Restaurant" }),
+      aDeposit({ on: "2026-08-11", amount: 300, payee: "CHECK RECEIVED", into: IGOR_PERSONAL }),
+    ]
+    expect(findTransfers(rows).size).toBe(0)
+    const [dinner, cheque] = verdicts(rows)
+    expect(dinner?.counts).toBe(true)
+    expect(cheque?.bucket).toBe("deposit")
+  })
+
+  test("an explicit spending tag still wins, so reimbursements keep working", () => {
+    // The one tag that can put money back into the count, and the escape hatch
+    // the reimbursement case depends on. A coincidental match must not eat it.
+    const rows = aTransfer({
+      on: "2026-08-10",
+      amount: 400,
+      from: IGOR_PERSONAL,
+      to: FIDELITY_JOINT,
+      toTags: ["spending"],
+    })
+    const [out, repaid] = verdicts(rows)
+    expect(repaid?.counts).toBe(true)
+    expect(repaid?.amount).toBe(-400)
+    // The tag speaks for its own row only; the other leg is still a transfer.
+    expect(out?.bucket).toBe("transfer")
+  })
+
+  test("the card autopay is matched structurally, as well as by payee", () => {
+    const legs = [
+      anAutopay({ on: "2026-08-09", amount: 9000 }),
+      anAutopayDebit({ on: "2026-08-09", amount: 9000, from: IGOR_PERSONAL }),
+    ]
+    expect(findTransfers(legs).size).toBe(2)
+    for (const verdict of verdicts(legs)) expect(verdict.counts).toBe(false)
+  })
+})
+
+/**
+ * The bucket a human can reach. Everything in `transfer` got there by
+ * inference, so every row in it has to stay correctable.
+ */
+describe("saying so by hand", () => {
+  test("a transfer tag settles a row nothing could match", () => {
+    // Checking -> Wallet: the wallet records the spend, but the
+    // arrival is never reported, so there is no second leg to match against.
+    const topUp = classify(
+      aCharge({
+        on: "2026-08-02",
+        amount: 1072,
+        account: IGOR_PERSONAL,
+        payee: "Venmo",
+        category: "Payment, Transfer",
+        tags: ["transfer"],
+      })
+    )
+    expect(topUp.bucket).toBe("transfer")
+    expect(topUp.counts).toBe(false)
+    expect(topUp.reviewed).toBe(true)
+  })
+
+  test("every transfer stays taggable, however it was decided", () => {
+    // The one-way door this closes: a row ignored by inference used to render
+    // no buttons at all, so a wrong verdict could only be fixed in Lunch Money.
+    const matched = verdictsFor(aWalletCashout({ on: "2026-08-20", amount: 400 }))
+    const guessed = classify(anAutopay({ on: "2026-08-09", amount: 9000 }))
+    const swept = classify(aSweep({ on: "2026-08-07", amount: 154 }))
+    for (const verdict of [...matched, guessed, swept]) expect(verdict.taggable).toBe(true)
+  })
+
+  test("a spending tag takes a matched leg back, and the row is reachable to do it", () => {
+    const legs = aWalletCashout({ on: "2026-08-20", amount: 400 })
+    expect(verdictsFor(legs)[0]?.taggable).toBe(true)
+    const insisted = [{ ...legs[0], tags: [tag("spending")] }, legs[1]]
+    expect(verdictsFor(insisted)[0]?.counts).toBe(true)
+  })
+
+  test("an untracked account is the one thing no tag can reach", () => {
+    // The check runs before the tags, so a button here would do nothing. Not
+    // rendering it is the honest answer.
+    const dormant = classify(
+      aCharge({ on: "2026-08-05", amount: 40, account: CHASE_UNITED, tags: ["spending"] })
+    )
+    expect(dormant.bucket).toBe("ignored")
+    expect(dormant.taggable).toBe(false)
+    expect(dormant.counts).toBe(false)
   })
 })

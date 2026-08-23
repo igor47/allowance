@@ -46,6 +46,60 @@
   --bs-btn-font-size: 0.72rem;
 }
 
+/*
+ * Bootstrap's solid variants set border-color to their own background, so the
+ * lit button in a group has no edge and reads as a hole punched in the group's
+ * outline rather than as one segment of it. Every tag button keeps its border,
+ * whichever state it is in — which is what makes the row still look like a
+ * group of four once one of them is on.
+ */
+.tag-group .tag-btn:not(.btn-outline-secondary) {
+  border-color: var(--bs-border-color);
+}
+
+/*
+ * Two buckets that Bootstrap's eight contextual colours cannot house.
+ *
+ * `success` is money arriving and belongs to `deposit`; `warning` is this
+ * file's "needs attention" everywhere else — the unreviewed stripe, the pending
+ * badge, the review count — so the calmest bucket must not wear it. These are
+ * mixed from Bootstrap's own extended palette rather than invented, so the set
+ * still reads as one system, and each serves both the badge and the button.
+ */
+.badge.tag-teal {
+  background-color: var(--bs-teal);
+  color: #000;
+}
+
+.btn.tag-teal {
+  --bs-btn-color: #000;
+  --bs-btn-bg: var(--bs-teal);
+  --bs-btn-border-color: var(--bs-teal);
+  --bs-btn-hover-color: #000;
+  --bs-btn-hover-bg: #3fd3ab;
+  --bs-btn-hover-border-color: #3fd3ab;
+  --bs-btn-active-color: #000;
+  --bs-btn-active-bg: #1aa87f;
+  --bs-btn-active-border-color: #1aa87f;
+}
+
+.badge.tag-purple {
+  background-color: var(--bs-purple);
+  color: #fff;
+}
+
+.btn.tag-purple {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-purple);
+  --bs-btn-border-color: var(--bs-purple);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #8558d6;
+  --bs-btn-hover-border-color: #8558d6;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #5c37a3;
+  --bs-btn-active-border-color: #5c37a3;
+}
+
 .htmx-request .tag-group {
   opacity: 0.4;
 }

@@ -172,12 +172,7 @@ export class DashboardService {
       transactions: inPeriod,
       // Deposits are taggable but not review items — payroll arriving twice a
       // month is not a question anyone needs asked. They live under "deposits".
-      needsReview: inPeriod.filter(
-        (c) =>
-          !c.classification.reviewed &&
-          c.classification.taggable &&
-          c.classification.bucket !== "deposit"
-      ).length,
+      needsReview: inPeriod.filter(needsReview).length,
       unknownAccounts: unknownAccounts(transactions),
       freshness: freshness(
         accounts,
@@ -262,7 +257,7 @@ export function isFilter(value: string | undefined): value is Filter {
  */
 export function needsReview(entry: ClassifiedTransaction): boolean {
   const { reviewed, taggable, bucket } = entry.classification
-  return !reviewed && taggable && bucket !== "deposit"
+  return !reviewed && taggable && bucket !== "deposit" && bucket !== "transfer"
 }
 
 export interface FilterSummary {
@@ -279,6 +274,8 @@ export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
   for (const entry of entries) {
     const amount = entry.classification.amount
     if (entry.classification.bucket === "ignored") continue
+    // A transfer is the same money seen twice; summing it would double it.
+    if (entry.classification.bucket === "transfer") continue
     total += amount
     if (entry.classification.counts) counting += amount
   }
@@ -297,10 +294,17 @@ export function applyFilter(
     // Money coming back: merchant refunds and bank deposits. This is where a
     // work expense reimbursement is found and tagged.
     case "deposits":
-      return transactions.filter((c) => c.classification.taggable && c.classification.amount < 0)
+      // Transfers are taggable and often negative — the autopay's card leg, a
+      // cashout landing — but they are not money coming back.
+      return transactions.filter(
+        (c) =>
+          c.classification.taggable &&
+          c.classification.amount < 0 &&
+          c.classification.bucket !== "transfer"
+      )
     case "fixed":
       return transactions.filter((c) =>
-        ["recurring", "irregular", "unclassified"].includes(c.classification.bucket)
+        ["recurring", "irregular", "unclassified", "transfer"].includes(c.classification.bucket)
       )
     case "igor":
     case "serena":

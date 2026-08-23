@@ -12,6 +12,11 @@ describe("classifying tags", () => {
     expect(nextTags(["spending"], classify("recurring"))).toEqual(["recurring"])
   })
 
+  test("transfer is one of them, so it displaces the others", () => {
+    expect(nextTags(["spending"], classify("transfer"))).toEqual(["transfer"])
+    expect(nextTags(["transfer"], classify("recurring"))).toEqual(["recurring"])
+  })
+
   test("clicking the current tag returns it to unreviewed", () => {
     expect(nextTags(["recurring"], classify("recurring"))).toEqual([])
   })

@@ -642,3 +642,44 @@ describe("access log", () => {
     expect(session.logs.some((l) => /GET \/ 500 \d+ms/.test(l))).toBe(true)
   })
 })
+
+/**
+ * Transfers are the same money seen twice, so they touch no total — but they
+ * are reachable, which the `ignored` bucket they used to live in was not.
+ */
+describe("transfers in the list", () => {
+  const withACashout = () =>
+    august().transfer({ on: "2026-08-05", amount: 500, from: IGOR_PERSONAL, to: CHASE })
+
+  test("neither leg moves the allowance", async () => {
+    expect((await dashboard(august())).hero).toBe("$2,400")
+    expect((await dashboard(withACashout())).hero).toBe("$2,400")
+  })
+
+  test("they stay out of the review queue", async () => {
+    const page = await dashboard(withACashout(), "?filter=review")
+    expect(page.rows.map((r) => r.badge)).not.toContain("transfer")
+  })
+
+  test("they are not money coming back", async () => {
+    const page = await dashboard(withACashout(), "?filter=deposits")
+    expect(page.rows.map((r) => r.badge)).not.toContain("transfer")
+  })
+
+  test("but every one of them can still be tagged", async () => {
+    // The regression that motivated the bucket split: an inferred verdict has
+    // to stay correctable from the list, not only from Lunch Money.
+    const page = await dashboard(withACashout(), "?filter=all")
+    const transfers = page.rows.filter((r) => r.badge === "transfer")
+    expect(transfers.length).toBe(2)
+    expect(transfers.every((r) => r.taggable)).toBe(true)
+  })
+
+  test("insisting a leg was spending takes it back", async () => {
+    const world = withACashout()
+    const id = world.transactions.find((t) => t.payee === "Standard transfer")?.id as number
+    const session = visit(world)
+    expect((await session.dashboard()).hero).toBe("$2,400")
+    expect((await session.tag(id, "spending")).hero).toBe("$1,900")
+  })
+})

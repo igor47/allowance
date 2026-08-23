@@ -47,11 +47,20 @@ explicit `spending` tag counts, which is how ATM withdrawals enter the number.
 |---|---|---|
 | `recurring` | autopay, subscriptions, memberships | no |
 | `irregular` | memory care, vet emergencies, dental | no |
+| `transfer` | money moved somewhere else you own | no |
 | `spending` | explicitly marked discretionary | yes |
 | *(untagged)* | not yet reviewed | yes on Chase, no elsewhere |
 | `igor` / `serena` | who spent it | no effect |
 
 Tags are written straight back to Lunch Money, so they survive this app entirely.
+
+Money moved between two accounts you own is never spending, and is usually
+detected rather than tagged: two rows equal, opposite, in different accounts and
+within three days are one movement, and both halves drop out. That covers the
+card autopay, a Venmo cashout and a bank-to-bank move without naming any of
+them. When the far side is not in Lunch Money there is nothing to match against
+and no pattern can help — money leaving for a wallet you track and one you don't
+look identical — so those land in review and you tag them `transfer` yourself.
 
 ## Configuration
 

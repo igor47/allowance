@@ -3,15 +3,21 @@ import { STATEMENT_ACCOUNT } from "../domain/card"
 import type { Bucket } from "../domain/policy"
 import { detailsOf } from "../lunchmoney/details"
 import { accountNameOf } from "../lunchmoney/types"
-import { FILTERS, type Filter, type FilterSummary } from "../services/dashboard"
+import {
+  FILTERS,
+  type Filter,
+  type FilterSummary,
+  needsReview as isReviewItem,
+} from "../services/dashboard"
 import { cents, money, shortDate } from "./format"
 
 const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
   spending: { label: "spending", class: "text-bg-primary" },
-  recurring: { label: "recurring", class: "text-bg-secondary" },
-  irregular: { label: "irregular", class: "text-bg-info" },
+  recurring: { label: "recurring", class: "tag-teal" },
+  irregular: { label: "irregular", class: "tag-purple" },
   unclassified: { label: "unclassified", class: "text-bg-dark border border-secondary" },
   deposit: { label: "deposit", class: "text-bg-success" },
+  transfer: { label: "transfer", class: "text-bg-secondary" },
   ignored: { label: "ignored", class: "text-bg-dark border border-secondary" },
 }
 
@@ -67,7 +73,7 @@ export const TransactionRow = ({
   const taggable = classification.taggable
   const credit = classification.amount < 0
   const classes = [
-    !classification.reviewed && taggable && classification.bucket !== "deposit" ? "unreviewed" : "",
+    isReviewItem(entry) ? "unreviewed" : "",
     classification.counts || credit ? "" : "not-counted",
   ]
     .filter(Boolean)
@@ -134,7 +140,7 @@ export const TransactionRow = ({
                 tag="recurring"
                 label="recur"
                 active={tags.includes("recurring")}
-                style="btn-secondary"
+                style="tag-teal"
               />
               <TagButton
                 month={month}
@@ -142,7 +148,15 @@ export const TransactionRow = ({
                 tag="irregular"
                 label="irreg"
                 active={tags.includes("irregular")}
-                style="btn-info"
+                style="tag-purple"
+              />
+              <TagButton
+                month={month}
+                id={txn.id}
+                tag="transfer"
+                label="xfer"
+                active={tags.includes("transfer")}
+                style="btn-secondary"
               />
             </div>
             <div class="btn-group tag-group">

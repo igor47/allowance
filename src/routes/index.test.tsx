@@ -572,13 +572,27 @@ describe("budget page", () => {
 
 describe("phone layout", () => {
   // The page must never scroll sideways: a 390px screen fits the navbar and
-  // the filters only because the brand is a 28px mark rather than a word and
-  // the filters wrap, and wide tables scroll inside their own box rather than
-  // dragging the page with them.
+  // the filters only because the brand is a 24px mark rather than a word, the
+  // page links collapse behind a toggle, and the filters wrap.
   test("the brand is the icon, which fits at every width", async () => {
     const brand = (await dashboard(august())).doc.querySelector(".navbar-brand")
     expect(brand?.getAttribute("class")).not.toContain("d-none")
     expect(brand?.querySelector("img")?.getAttribute("src")).toBe("/static/icon.svg")
+  })
+
+  test("the page links collapse, and the controls do not", async () => {
+    // The controls are the reason the collapse exists. Moving the clock or the
+    // month picker inside it would hide the refresh button behind a toggle
+    // and cost the staleness colour the glance it is in the navbar for.
+    const page = await dashboard(august())
+    const menu = page.doc.querySelector("#nav-menu")
+    expect(menu?.getAttribute("class")).toContain("collapse")
+    expect(menu?.querySelectorAll(".nav-link")).toHaveLength(2)
+    expect(menu?.querySelector("#sync")).toBeNull()
+    expect(menu?.querySelector(".month-menu")).toBeNull()
+
+    const toggler = page.doc.querySelector(".navbar-toggler")
+    expect(toggler?.getAttribute("data-bs-target")).toBe("#nav-menu")
   })
 
   test("the filter bar wraps instead of running off the edge", async () => {

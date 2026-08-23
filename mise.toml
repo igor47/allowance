@@ -38,7 +38,7 @@ run = "NODE_ENV=test bun test"
 
 [tasks.preview]
 description = "Serve the app over a synthetic world, for looking at the UI (no API)"
-run = "bun run scripts/preview.ts"
+run = "bun run --watch scripts/preview.ts"
 
 [tasks."configure:lunchmoney"]
 description = "One-time Lunch Money account config; dry run unless APPLY=1 (manual only)"

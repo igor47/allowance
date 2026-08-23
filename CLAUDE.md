@@ -5,6 +5,25 @@ Lunch Money API. Deployed to the `igor` stack behind authentik.
 
 Design plan of record: [`docs/plans/0001-initial-plan.md`](docs/plans/0001-initial-plan.md).
 
+## How to work in this repo
+
+**Commit as you go.** One logical change per commit, with `mise run check` and
+`mise run test` green before each one. Do not accumulate a session's worth of
+work into a single uncommitted diff and hand it over at the end — it is
+unreviewable, it cannot be bisected, and the reasoning that produced each step
+is gone by the time it lands. A change that is finished and passing is a change
+that should be committed, even if the next one is about to start.
+
+**Live API calls are manual, one-shot and read-only.** Never from a test, never
+from CI, never in a loop — see Runtime below. Reaching for real data to settle a
+question is right; reaching for it repeatedly is how the rate limit bites.
+
+**When the data contradicts a comment, the comment is part of the bug.** Several
+of the doc comments in `src/domain/` state facts about the real feed ("every row
+on that account is named after a person"). Those are load-bearing — the next
+person will trust them — so when one turns out to be false, correct it in the
+same commit as the code, and say what the counterexample was.
+
 ## mise owns every recurring operation
 
 **If you find yourself typing a command more than once, it becomes a mise task.**

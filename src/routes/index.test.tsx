@@ -632,6 +632,22 @@ describe("phone layout", () => {
     expect(budget.doc.querySelectorAll(".table-responsive table")).toHaveLength(2)
   })
 
+  test("the budget row labels its own figures, for when the header goes away", async () => {
+    // Below sm the six columns stack and the header is hidden along with the
+    // alignment that gave five of the six figures their meaning; each cell
+    // draws its own `data-label` instead. They must keep saying what the
+    // headers say, and there is nothing in the CSS to notice when they drift.
+    const page = await visit(august().subscription({ payee: "A Gym", amount: 100 })).budget()
+    const headers = Array.from(page.doc.querySelectorAll("#budget thead th")).map((h) =>
+      h.textContent?.trim()
+    )
+    const labels = Array.from(page.doc.querySelectorAll("#budget tbody tr:first-child td")).map(
+      (td) => td.getAttribute("data-label")
+    )
+    // Item and State say themselves; the four in between do not.
+    expect(labels).toEqual([null, ...headers.slice(1, 5), null])
+  })
+
   test("the sync menu only refuses to wrap on its label rows", async () => {
     // Applying nowrap to every child stretched the queued sentence into one
     // 609px line, which is wider than the phone it opens on.

@@ -39,9 +39,13 @@ const Row = ({ c }: { c: Commitment }) => {
         <div>{c.payee}</div>
         {c.description ? <div class="small text-secondary">{c.description}</div> : null}
       </td>
-      <td class="text-secondary small">{c.cadence}</td>
-      <td class="text-end tabular">{money(c.amount)}</td>
-      <td class="text-end tabular">
+      <td class="text-secondary small" data-label="Cadence">
+        {c.cadence}
+      </td>
+      <td class="text-end tabular" data-label="Each">
+        {money(c.amount)}
+      </td>
+      <td class="text-end tabular" data-label="Per month">
         {/* Only worth showing when it differs from the per-occurrence amount. */}
         {Math.abs(c.monthly - c.amount) < 0.5 ? (
           <span class="text-secondary">—</span>
@@ -49,7 +53,7 @@ const Row = ({ c }: { c: Commitment }) => {
           money(c.monthly)
         )}
       </td>
-      <td class="text-end tabular">
+      <td class="text-end tabular" data-label="Due this month">
         {/*
           What actually lands this month, which is the figure `monthly` hides:
           an annual bill is a twelfth of itself there and its whole self here,
@@ -84,8 +88,13 @@ const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
     <div class="card border-secondary-subtle mb-3">
       <div class="card-body">
         <h2 class="h6 stat-label text-secondary mb-3">{caption}</h2>
+        {/*
+          Six columns do not fit on a phone, so below sm `.budget-table` stacks
+          the row and the header goes away with the alignment it described —
+          which is what the `data-label` on each cell is for. See app.css.
+        */}
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
+          <table class="table table-sm budget-table align-middle mb-0">
             <thead>
               <tr class="text-secondary small">
                 <th>Item</th>
@@ -150,7 +159,13 @@ export const Budget = ({ budget, configuredTarget }: BudgetProps) => {
               </div>
             </div>
             <div class="col-lg-7">
-              <div class="row row-cols-3 g-3 text-center">
+              {/*
+                One per line on a phone. Three columns of a 390px screen leave
+                about 110px each, which is narrower than "$4,865 due Aug" — the
+                two detail lines under Committed wrapped mid-phrase, and a
+                figure split across two lines reads as two figures.
+              */}
+              <div class="row row-cols-1 row-cols-sm-3 g-3 text-center">
                 <div>
                   <div class="stat-label text-secondary">Income</div>
                   <div class="fs-5 tabular text-success">{money(totals.income)}</div>

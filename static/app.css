@@ -326,3 +326,83 @@
     --bs-btn-padding-y: 0.35rem;
   }
 }
+
+/*
+ * The budget tables stack too, and label themselves as they go.
+ *
+ * Six columns at 390px put "State" off the right edge of its own scroll box,
+ * so the one column saying an expected bill never arrived was the one you
+ * could not see. Stacking the row solves that but throws away the header,
+ * which is where five of the six figures got their meaning — hence the
+ * `data-label` on each cell, which the row draws for itself:
+ *
+ *   Landlord                                       [monthly]
+ *   Cadence                                         monthly
+ *   Each                                             $3,400
+ *   Per month                                             —
+ *   Due this month                             $3,400 8/10
+ *
+ * These rows are a handful per page, unlike the transaction list, so the
+ * height costs little and every figure survives.
+ */
+@media (max-width: 575.98px) {
+  .budget-table thead {
+    display: none;
+  }
+
+  .budget-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 0.5rem;
+    padding: 0.6rem 0;
+    border-bottom: var(--bs-border-width) solid var(--bs-table-border-color);
+  }
+
+  .budget-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.1rem 0;
+    border: 0;
+  }
+
+  /*
+   * `margin-right: auto` rather than `space-between`, so a cell holding two
+   * things — the amount and the dates it is due on — keeps them together on
+   * the right instead of spreading them across the line.
+   */
+  .budget-table td[data-label]::before {
+    content: attr(data-label);
+    margin-right: auto;
+    color: var(--bs-secondary-color);
+    font-weight: 400;
+    text-transform: none;
+  }
+
+  /* Payee and state make the header line; the labelled figures follow. */
+  .budget-table td:nth-child(1) {
+    grid-area: 1 / 1;
+    display: block;
+  }
+
+  .budget-table td:nth-child(6) {
+    grid-area: 1 / 2;
+  }
+
+  .budget-table td:nth-child(2) {
+    grid-area: 2 / 1 / 3 / 3;
+  }
+
+  .budget-table td:nth-child(3) {
+    grid-area: 3 / 1 / 4 / 3;
+  }
+
+  .budget-table td:nth-child(4) {
+    grid-area: 4 / 1 / 5 / 3;
+  }
+
+  .budget-table td:nth-child(5) {
+    grid-area: 5 / 1 / 6 / 3;
+  }
+}

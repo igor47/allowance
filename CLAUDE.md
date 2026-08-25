@@ -34,7 +34,8 @@ tasks run locally and anywhere else (including CI, if it ever exists).
 | Task | Does |
 |---|---|
 | `mise run setup` | install deps, vendor htmx/idiomorph into `static/` |
-| `mise run dev` | dev server, hot reload |
+| `mise run dev` | dev server, hot reload — talks to the **live** API |
+| `mise run preview` | dev server over a synthetic world, for looking at the UI offline |
 | `mise run check` | biome lint + `tsc --noEmit` |
 | `mise run check:fix` | biome `--write`, then typecheck |
 | `mise run test` | `bun test` — offline, never touches the live API |

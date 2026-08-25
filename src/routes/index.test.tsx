@@ -597,14 +597,33 @@ describe("phone layout", () => {
 
   test("the filter bar wraps instead of running off the edge", async () => {
     const page = await dashboard(august())
-    expect(page.doc.querySelector("#txn-list .btn-group")?.getAttribute("class")).toContain(
-      "flex-wrap"
-    )
+    const bar = page.doc.querySelector("#txn-list .btn-group")?.getAttribute("class")
+    expect(bar).toContain("flex-wrap")
+    // Below sm the joins come off and the seven become chips, because a button
+    // group only knows how to square the edges of a single row.
+    expect(bar).toContain("filter-bar")
+  })
+
+  test("the row's cells stay in the order the phone grid places them", async () => {
+    // Below sm the `tr` is a three-row grid and `static/app.css` places the
+    // cells into it by `:nth-child` — date, payee, amount, bucket, buttons.
+    // Reordering the markup would scramble the phone layout silently, because
+    // the desktop table would go on looking exactly right.
+    const page = await dashboard(august().charge({ on: "2026-08-10", amount: 42 }))
+    const cells = Array.from(page.doc.querySelectorAll("tbody tr:first-child td"))
+    expect(cells).toHaveLength(5)
+    expect(cells[0]?.querySelector(".txn-posted")).not.toBeNull()
+    expect(cells[1]?.querySelectorAll(".txn-line")).toHaveLength(3)
+    expect(cells[2]?.textContent?.trim()).toMatch(/^-?\$[\d,]+\.\d\d$/)
+    expect(cells[3]?.querySelector(".badge")).not.toBeNull()
+    expect(cells[4]?.querySelectorAll(".tag-btn").length).toBeGreaterThan(0)
   })
 
   test("wide tables scroll inside their own container", async () => {
     const home = await dashboard(august())
     expect(home.doc.querySelector(".table-responsive .txn-table")).not.toBeNull()
+    // One box, not two: the wrapper used to be nested inside a copy of itself.
+    expect(home.doc.querySelectorAll(".table-responsive")).toHaveLength(1)
     const budget = await visit(
       august()
         .income({ payee: "Payroll", amount: 4_000 })

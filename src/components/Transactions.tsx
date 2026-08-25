@@ -206,8 +206,9 @@ export const TransactionList = ({
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
       <h2 class="h6 text-secondary stat-label mb-0">Transactions</h2>
       {/* Wraps on a phone: seven filters do not fit on one 390px line, and a
-          filter you cannot see is a filter you do not have. */}
-      <div class="btn-group btn-group-sm flex-wrap">
+          filter you cannot see is a filter you do not have. Below sm they stop
+          being a joined group and become chips — see `.filter-bar`. */}
+      <div class="btn-group btn-group-sm flex-wrap filter-bar">
         {FILTERS.map((f) => (
           <a
             class={`btn ${f === filter ? "btn-secondary" : "btn-outline-secondary"}`}
@@ -242,15 +243,13 @@ export const TransactionList = ({
       <p class="text-secondary fst-italic">Nothing here.</p>
     ) : (
       <div class="table-responsive">
-        <div class="table-responsive">
-          <table class="table table-sm txn-table align-middle mb-0">
-            <tbody>
-              {entries.map((entry) => (
-                <TransactionRow entry={entry} month={month} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <table class="table table-sm txn-table align-middle mb-0">
+          <tbody>
+            {entries.map((entry) => (
+              <TransactionRow entry={entry} month={month} />
+            ))}
+          </tbody>
+        </table>
       </div>
     )}
   </div>

@@ -201,3 +201,128 @@
 .month-menu {
   min-width: 9rem;
 }
+
+/*
+ * On a phone the transaction row goes vertical.
+ *
+ * Five columns need about 700px between them, so at 390px the amount, the
+ * bucket badge and every tag button sat off the right edge inside the
+ * horizontal scroller. The list was readable and completely untaggable, which
+ * is most of what the list is for.
+ *
+ * The markup does not change: the `tr` becomes a three-row grid and the cells
+ * are placed into it by position, so every selector in `src/test/page.ts`
+ * still finds the same element.
+ *
+ *   8/11 ↳ 8/12   [spending]              $246.18
+ *   A Grocery Cooperative
+ *   A GROCERY COOP 1745 FOLSOM ST SAN F…
+ *   Groceries
+ *   [Card] untagged on Card
+ *   [ spend ][ recur ][ irreg ][ xfer ]  [ I ][ S ]
+ *
+ * The bucket rides on the header line with the date because it is metadata of
+ * the same kind, which leaves the whole width to the buttons — and the whole
+ * width is what makes them a 36px tap target instead of a 20px one.
+ */
+@media (max-width: 575.98px) {
+  .txn-table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.55rem 0.5rem;
+    /* On the row, because the cells' own would draw five lines, one each. */
+    border-bottom: var(--bs-border-width) solid var(--bs-table-border-color);
+  }
+
+  .txn-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  /* Date, bucket, amount — the header line. */
+  .txn-table td:nth-child(1) {
+    grid-area: 1 / 1;
+  }
+
+  .txn-table td:nth-child(4) {
+    grid-area: 1 / 2;
+  }
+
+  .txn-table td:nth-child(3) {
+    grid-area: 1 / 3;
+    font-weight: 500;
+  }
+
+  /* Payee and its meta lines, then the buttons, each across the full width. */
+  .txn-table td:nth-child(2) {
+    grid-area: 2 / 1 / 3 / 4;
+    margin-top: 0.15rem;
+  }
+
+  .txn-table td:nth-child(5) {
+    grid-area: 3 / 1 / 4 / 4;
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    /* Set for the desktop column; here the groups may break at 320px. */
+    white-space: normal;
+  }
+
+  /*
+   * Both groups share the free space, so a thumb has something to hit. The
+   * desktop size is set for a mouse and is half the 44px a finger wants.
+   */
+  .txn-table td:nth-child(5) .tag-group {
+    flex: 1 1 auto;
+  }
+
+  .txn-table .tag-btn {
+    --bs-btn-padding-y: 0.4rem;
+    --bs-btn-padding-x: 0.5rem;
+    --bs-btn-font-size: 0.85rem;
+  }
+
+  /* One line, not two: there is room beside the date for where it posted. */
+  .txn-posted {
+    display: inline;
+    margin-left: 0.35rem;
+  }
+
+  /*
+   * A meta line with nothing in it costs 1.15rem of a 390px screen, and a row
+   * has three of them. Holding that space is what stops the row moving under
+   * the finger when a tag rewrites the reason — but the reason line is the
+   * only one that is ever rewritten, so the other two can collapse without
+   * bringing the jump back.
+   */
+  .txn-line:empty,
+  .txn-posted:empty {
+    display: none;
+  }
+
+  /*
+   * Seven filters do not fit on one 390px line, and a button group only knows
+   * how to square the edges of a single row: wrapped, the joins land in the
+   * middle of a row and the last row stretches three buttons to the width of
+   * the first row's four. Below sm they stop pretending to be one control and
+   * become what they already read as — chips, at their own width.
+   *
+   * `!important` because Bootstrap sets the joins from selectors four classes
+   * deep (`.btn-group > :not(.btn-check:first-child) + .btn`), which nothing
+   * short of restating them can outweigh.
+   */
+  .filter-bar {
+    gap: 0.35rem;
+  }
+
+  .filter-bar > .btn {
+    flex: 0 0 auto;
+    margin-left: 0 !important;
+    border-radius: var(--bs-border-radius-sm) !important;
+    /* Only the height: growing the sides too would cost a third row. */
+    --bs-btn-padding-y: 0.35rem;
+  }
+}

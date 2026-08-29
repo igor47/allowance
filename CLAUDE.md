@@ -1,7 +1,8 @@
 # allowance — project guidelines
 
-A shared daily spending allowance for Igor and Serena, computed live from the
-Lunch Money API. Deployed to the `igor` stack behind authentik.
+A shared daily spending allowance, computed live from the Lunch Money API. Runs
+behind a forward-auth proxy, which is the only thing standing between it and
+the internet — the app has no login of its own.
 
 Design plan of record: [`docs/plans/0001-initial-plan.md`](docs/plans/0001-initial-plan.md).
 
@@ -39,15 +40,18 @@ tasks run locally and anywhere else (including CI, if it ever exists).
 | `mise run check` | biome lint + `tsc --noEmit` |
 | `mise run check:fix` | biome `--write`, then typecheck |
 | `mise run test` | `bun test` — offline, never touches the live API |
+| `mise run image` | build the container image locally, as CI does |
 | `mise run smoke` | one-shot live fetch + print, to eyeball real numbers (manual) |
 | `mise run migrate:verify` | diff API v1 against v2 over one window, live (manual) |
-| `mise run publish` | build + push the image; **depends on check + test** |
-
-`publish` *depends on* `check` and `test` rather than being run after them, so an
-unchecked image cannot reach the registry. That dependency is the release gate.
 
 Scripts that back a task live in `scripts/` and are invoked *only* through the
 task, never directly.
+
+**Releases come from CI, not from a laptop.** `.github/workflows/ci.yml` runs
+`check` and `test` as jobs and the publish job `needs` both, so an unchecked
+image cannot reach the registry. Deployment is not this repo's business: the
+image takes a config file and an API key, and where it runs is the deployer's
+problem.
 
 ## Runtime
 
@@ -126,8 +130,25 @@ beside it only when the month is materially heavier or lighter.
 Lunch Money is the store. There is no SQLite, no migrations, no volume, no
 backup. State that outlives a request is limited to an in-memory cache in
 `src/lunchmoney/cache.ts`. If a feature seems to need persistence, it probably
-belongs in Lunch Money as a tag or a note — which also means Serena can edit it
-from her phone.
+belongs in Lunch Money as a tag or a note — which also means anyone in the
+household can edit it from their phone.
+
+## Configuration is a file, and it names no bank
+
+`src/config.ts` reads `allowance.toml` at boot and the environment alongside it,
+and the split is total: **policy** — the accounts, the people, the daily target,
+how far back the picker goes — is in the file; **plumbing** — the API key, the
+port, cache timings, the auth header — is in the environment. Nothing is
+settable in both, so there is never a question of which won.
+
+Nothing in `src/` reads the file at import time. `loadConfig()` is called by the
+entrypoints, which is why a test can build a `Config` literal and never touch
+the disk.
+
+The loader validates every field by hand rather than trusting the shape. The
+failure that matters is not "invalid config" but "config that parsed and means
+something else" — a `policy = "spendng"` that silently read as `fixed` would
+take a month of spending out of the number and say nothing.
 
 ## The domain rules live in one place
 
@@ -138,7 +159,7 @@ from her phone.
 - `cycle.ts` — credit card statement cycle boundaries
 
 `card.ts` also holds `reconcile()`, which checks the reconstruction against the
-autopay Chase actually debited — the one figure in the data that did not come
+autopay the issuer actually debited — the one figure in the data that did not come
 from us. See its doc comment for why that is a real oracle and not a tautology.
 
 These are pure. Keep API shapes, HTTP, and rendering out of them; anything that
@@ -147,20 +168,24 @@ current date is always an argument.
 
 ### The one rule that will bite you
 
-Inclusion is **per-account**, not global. On Card, untagged means
-discretionary and counts. On the bank accounts, untagged means *fixed* — rent
-and the card autopay both leave from Checking — and only an explicit
-`spending` tag counts. Applying the Chase rule globally overstates spend by an
-order of magnitude. See `ACCOUNT_POLICY` in `src/domain/policy.ts`, whose values
-say what an account *is* (`spending`, `fixed`, `ignore`), not which way its
-default falls.
+Inclusion is **per-account**, not global. On a `spending` account, untagged
+means discretionary and counts. On a `fixed` one, untagged means exactly that —
+rent and the card autopay both leave from a bank account — and only an explicit
+`spending` tag counts. Applying the card rule globally overstates spend by an
+order of magnitude.
+
+Which account is which arrives as an `Accounts` argument, from `[accounts]` in
+`allowance.toml`. The policy values say what an account *is* (`spending`,
+`fixed`, `ignore`), not which way its default falls, and the domain functions
+take the map rather than reaching for a constant — so `src/domain/` names no
+bank and the same rules ship to anyone.
 
 ### Transfers are matched, not recognised
 
 Money moving between two accounts we own is caught by `findTransfers()`, which
 asks a structural question — is there an equal and opposite amount in another
 account within three days? — rather than asking whether a payee looks like a
-transfer. That subsumes the card autopay, the Venmo cashout and a plain
+transfer. That subsumes the card autopay, the wallet cashout and a plain
 bank-to-bank move under one rule that names no bank, which is most of what made
 `policy.ts` unshippable to anyone else.
 
@@ -173,8 +198,9 @@ Three things it deliberately will not do:
 - **A match must be unambiguous in both directions.** A leg with two possible
   partners matches neither. Ambiguity falls back to asking a human rather than
   to ignoring money.
-- **Amounts must agree to the cent**, so a transfer that charges a fee — Venmo's
-  instant option takes ~1.75% — falls through to the payee rules and counts.
+- **Amounts must agree to the cent**, so a transfer that charges a fee — an
+  instant cashout typically takes 1–2% — falls through to the payee rules and
+  counts.
   Wrong small rather than wrong invisibly, as with `perMonth()`.
 - **Structure alone is not enough.** A $300 restaurant charge and a $300 cheque
   three days later meet every arithmetic condition and are two separate things,
@@ -185,11 +211,11 @@ Three things it deliberately will not do:
 
 Matching cannot catch a movement whose far side is not in Lunch Money, and the
 answer to that is **the `transfer` tag**, not a cleverer pattern. There used to
-be a `^venmo$` rule that ignored every bank row paid to Venmo; it was deleted
-because those rows are ambiguous in a way no pattern can resolve. `Checking
-→ Wallet` is a transfer — the wallet is tracked, so the spend lands there
-and counting the bank row too would double it. `Savings → Serena's Venmo`
-is a spend — that wallet is not in Lunch Money, so the bank row is the only
+be a `^venmo$` rule that ignored every bank row paid to a wallet app; it was
+deleted because those rows are ambiguous in a way no pattern can resolve. A bank
+row paid into a wallet you *track* is a transfer — the spend lands in the
+wallet, and counting the bank row too would double it. The same row paid into a
+wallet that is not in Lunch Money is a spend, because the bank row is the only
 record there will ever be. Identical payee, identical category, opposite
 meaning. They go to review, and a human says which.
 
@@ -202,7 +228,7 @@ guess about a payee, and a tag still wins there.
 ### `transfer` and `ignored` are different, and the difference is reachability
 
 Everything in `transfer` got there by inference — a matched pair, a payee that
-reads as an autopay, a Fidelity core sweep — so **every row in it stays
+reads as an autopay, a brokerage core sweep — so **every row in it stays
 taggable**. An inferred verdict that cannot be corrected from the list is a
 one-way door: before the split, a wrongly-ignored row could only be fixed in
 Lunch Money's own app, which is exactly the trap the pairing rule made more
@@ -229,10 +255,10 @@ would tell us, plus the day and the instant:
 
 ```ts
 const world = aWorld({ today: "2026-08-14" })
-  .account(CHASE, { balance: "1200.00" })
+  .account(CARD, { balance: "1200.00" })
   .charge({ on: "2026-08-03", amount: 100, payee: "A Grocer" })
   .charge({ on: "2026-07-12", amount: 250, posted: "2026-07-13" })
-  .autopay({ on: "2026-08-09", amount: 1000, from: IGOR_PERSONAL })
+  .autopay({ on: "2026-08-09", amount: 1000, from: CHECKING })
 
 const page = await dashboard(world)
 expect(page.hero).toBe("$2,700")
@@ -240,6 +266,7 @@ expect(page.hero).toBe("$2,700")
 
 | File | Holds |
 |---|---|
+| `src/test/accounts.ts` | the five accounts every scenario is written against |
 | `src/test/factories.ts` | the four API shapes, and `plaid_metadata` |
 | `src/test/world.ts` | `World`, `aWorld()`, and the verbs — also as free functions for the domain tests |
 | `src/test/page.ts` | page objects; **every selector in the suite lives here** |
@@ -251,10 +278,12 @@ Three rules that are easy to get wrong:
 - **Positive is money leaving**, on every verb. `charge({amount: 25})` and
   `refund({amount: 40})` and `deposit({amount: 5000})` all take a positive
   number; the verb applies the sign. No test should type a minus sign.
-- **Accounts are named by the constants in `policy.ts`**, and the verbs only
-  accept those. A world that invents an account name would land in
-  `UNKNOWN_ACCOUNT_POLICY` and pass for the wrong reason; this makes it a type
-  error instead.
+- **Accounts are named by the constants in `src/test/accounts.ts`**, and the
+  verbs only accept those. A world that invents an account name would land in
+  `UNKNOWN_ACCOUNT_POLICY` and pass for the wrong reason; `TestAccount` makes it
+  a type error instead. Those five names — Card, Wallet, Checking, Savings, Old
+  Card — are the same ones `allowance.example.toml` uses, so the shipped example
+  and the suite describe one world.
 - **`today` and `now` come from the world**, never from a global or the wall
   clock, so a scenario cannot get its clock out of sync with its data.
 

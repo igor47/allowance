@@ -39,6 +39,7 @@ export const TEST_CONFIG: Config = {
   lunchMoneyApiKey: "test",
   cacheTtlSeconds: 0,
   refreshAfterMinutes: 30,
+  authUserHeader: "X-authentik-username",
   allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
   historyStart: "2025-01",
   accounts: TEST_ACCOUNTS,

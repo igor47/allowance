@@ -107,9 +107,9 @@ const app = createApp({
 const port = Number(process.env.PREVIEW_PORT ?? 3099)
 
 /**
- * Behind authentik there is always a username in the navbar, and it is the
- * widest thing in it. Serving without one would make the header look roomier
- * here than it is in production, which is the opposite of useful.
+ * Behind a forward-auth proxy there is always a username in the navbar, and it
+ * is the widest thing in it. Serving without one would make the header look
+ * roomier here than it is in production, which is the opposite of useful.
  */
 const user = process.env.PREVIEW_USER ?? "alex@example.org"
 

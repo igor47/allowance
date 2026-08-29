@@ -1,16 +1,24 @@
 import type { MiddlewareHandler } from "hono"
 
 /**
- * Identity comes from authentik's forward-auth outpost, which traefik injects
- * as X-authentik-username. Traefik is configured with
- * `underscoreHeadersStrategy: delete` on the https entrypoint, so a client
- * cannot smuggle the underscore variant past it — the header is trustworthy
- * behind the proxy and absent everywhere else.
+ * Who is asking, according to the proxy in front of us.
+ *
+ * The app has no login of its own. Identity arrives as a header injected by a
+ * forward-auth proxy — `X-authentik-username` by default, since that is what
+ * authentik's outpost sends, and `AUTH_USER_HEADER` for anything else.
+ *
+ * This is only trustworthy because the proxy strips the header from inbound
+ * requests. Traefik does that with `underscoreHeadersStrategy: delete` on the
+ * https entrypoint, which stops a client smuggling the underscore variant past
+ * it. **A deployment that exposes the app directly is a deployment where
+ * anyone can claim to be anyone**, so this must never be the only gate.
  */
-export const identity: MiddlewareHandler = async (c, next) => {
-  c.set("user", c.req.header("X-authentik-username"))
-  await next()
-}
+export const identity =
+  (header: string): MiddlewareHandler =>
+  async (c, next) => {
+    c.set("user", c.req.header(header))
+    await next()
+  }
 
 /** Where a log line goes. Injected so tests can read what was written. */
 export type Log = (line: string) => void

@@ -38,7 +38,7 @@ export function createApp({ client, config, today, clock, log = console.log }: A
   app.get("/healthz", (c) => c.text("ok"))
   app.use("/static/*", serveStatic({ root: "./" }))
 
-  app.use("*", identity)
+  app.use("*", identity(config.authUserHeader))
   app.use("*", accessLog(log))
   app.use("*", async (c, next) => {
     c.set("service", service)

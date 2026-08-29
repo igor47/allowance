@@ -52,6 +52,8 @@ export interface Config {
   cacheTtlSeconds: number
   /** Ask Lunch Money to pull from Plaid if it has not for this long. */
   refreshAfterMinutes: number
+  /** The header a forward-auth proxy puts the username in. See `identity()`. */
+  authUserHeader: string
   allowance: AllowanceConfig
   /**
    * How far back the month picker offers to go, as YYYY-MM. Declared because
@@ -219,7 +221,12 @@ export function parseConfig(raw: unknown, source: string): Omit<Config, keyof En
 /** The half of `Config` that comes from the environment. */
 type EnvConfig = Pick<
   Config,
-  "port" | "timezone" | "lunchMoneyApiKey" | "cacheTtlSeconds" | "refreshAfterMinutes"
+  | "port"
+  | "timezone"
+  | "lunchMoneyApiKey"
+  | "cacheTtlSeconds"
+  | "refreshAfterMinutes"
+  | "authUserHeader"
 >
 
 function envConfig(): EnvConfig {
@@ -229,6 +236,7 @@ function envConfig(): EnvConfig {
     lunchMoneyApiKey: process.env.LUNCHMONEY_API_KEY ?? "",
     cacheTtlSeconds: int("CACHE_TTL_SECONDS", 300),
     refreshAfterMinutes: int("REFRESH_AFTER_MINUTES", 30),
+    authUserHeader: process.env.AUTH_USER_HEADER ?? "X-authentik-username",
   }
 }
 

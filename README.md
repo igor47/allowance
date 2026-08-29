@@ -191,8 +191,9 @@ const page = await dashboard(world)
 expect(page.hero).toBe("$2,700")
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for the design rules that are easy to get wrong,
-and [`docs/plans/`](docs/plans/) for how it got here.
+See [`CLAUDE.md`](CLAUDE.md) for the design rules that are easy to get wrong —
+per-account inclusion, the transfer-matching rules, and why `perMonth()` refuses
+a partial window.
 
 ## Licence
 

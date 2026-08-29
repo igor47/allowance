@@ -4,7 +4,10 @@ A shared daily spending allowance, computed live from the Lunch Money API. Runs
 behind a forward-auth proxy, which is the only thing standing between it and
 the internet — the app has no login of its own.
 
-Design plan of record: [`docs/plans/0001-initial-plan.md`](docs/plans/0001-initial-plan.md).
+This file is the design plan of record. The two documents that used to hold it
+were built out of one household's real balances and merchants and could not be
+scrubbed without being rewritten, so the reasoning that survives them lives
+here, in the sections below.
 
 ## How to work in this repo
 
@@ -248,7 +251,15 @@ landing or an autopay's card credit would otherwise read as money coming back.
 Offline, always, and entirely synthetic. There is no recorded data anywhere in
 this repository, and none should be added: a number pinned from a recording can
 only ever report *the code changed*, never *the code is wrong*, because the code
-produced it. See [`docs/plans/0002-scenario-testing.md`](docs/plans/0002-scenario-testing.md).
+produced it.
+
+The suite used to be built on a recorded fixture of a thousand real
+transactions, and replacing it is why `World` exists. Two things that recording
+was doing are now done differently and better: the statement arithmetic is
+checked against the autopay the issuer actually debited — see `reconcile()` —
+rather than against a downloaded PDF, and the classifier is checked against
+scenarios that say what rule they are about rather than against whichever rows
+happened to be in one month of one year.
 
 A test says what should be true given a **world** — the four things Lunch Money
 would tell us, plus the day and the instant:

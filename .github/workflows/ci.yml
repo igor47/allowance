@@ -1,0 +1,79 @@
+# Lint, typecheck, test — and on main or a version tag, publish the image.
+#
+# The jobs invoke the same `mise` tasks that run on a laptop rather than
+# respelling the commands: mise is this project's single index of what can be
+# done to it, and a CI file with its own copy of `biome check` is how the two
+# drift apart.
+#
+# `publish` needs both `check` and `test`, so an image that has not been
+# checked and tested cannot reach the registry. That gate used to be a mise
+# task dependency, which meant releases came from whichever laptop happened to
+# have docker set up.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run setup
+      - run: mise run check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run setup
+      # Offline by construction: nothing under src/ knows how to reach the
+      # network, so this cannot touch the Lunch Money API even by accident.
+      - run: mise run test
+
+  publish:
+    needs: [check, test]
+    # Pull requests get the gate without the push; there is nothing to release.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # `main` publishes :main and :sha-<commit>; a v* tag publishes the
+      # version and :latest. Deployments should pin a version tag — a bad
+      # release ought to require a deliberate redeploy, not a restart.
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+          flavor: latest=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

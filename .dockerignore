@@ -7,4 +7,7 @@ src/**/*.test.ts
 src/**/*.test.tsx
 src/test
 mise.local.toml
+# The deployment mounts its own; baking a local one in would ship an account
+# list into the image.
+allowance.toml
 *.log

@@ -111,7 +111,22 @@ export const Layout = ({ title, user, nav, page, children }: PropsWithChildren<L
           </div>
         </div>
       </nav>
-      <main class="container-xl pb-5">{children}</main>
+      <main class="container-xl">{children}</main>
+      {/*
+        Quiet on purpose. The page is a number you glance at, and a footer that
+        competed with it would be worse than none — so this is small, muted,
+        and below the fold of everything that matters.
+      */}
+      <footer class="container-xl py-4 mt-4 text-secondary small">
+        made with{" "}
+        <span role="img" aria-label="love">
+          &#9829;
+        </span>{" "}
+        by{" "}
+        <a class="link-secondary" href="https://igor.moomers.org" rel="me">
+          igor47
+        </a>
+      </footer>
     </body>
   </html>
 )

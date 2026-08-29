@@ -13,7 +13,7 @@ import { type CycleTotal, cycleTotal, type Reconciliation, reconcile } from "../
 import { type Cycle, cycleView } from "../domain/cycle"
 import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
-import { statementAccount, unknownAccounts } from "../domain/policy"
+import { findTransfers, statementAccount, unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
 import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
 
@@ -141,7 +141,11 @@ export class DashboardService {
     // `accounts` here is the config's policy; the API's are `plaidAccounts`.
     const { transactions, plaidAccounts } = await this.load(start, today)
 
-    const classified = classifyAll(transactions, this.config)
+    // One index, shared: the classifier needs it to bucket both legs of a
+    // movement, and the statement needs it to know which row on the card was
+    // the payment rather than a purchase.
+    const transfers = findTransfers(transactions, categories)
+    const classified = classifyAll(transactions, this.config, transfers)
     const inPeriod = classified
       .filter((c) => c.txn.date >= periodStart && c.txn.date <= today)
       .sort((a, b) =>
@@ -154,21 +158,24 @@ export class DashboardService {
       cycles.lastClosed.start,
       cycles.lastClosed.end,
       on,
-      categories
+      categories,
+      transfers
     )
     const currentTotal = cycleTotal(
       transactions,
       cycles.current.start,
       cycles.current.end,
       on,
-      categories
+      categories,
+      transfers
     )
     const settledTotal = cycleTotal(
       transactions,
       cycles.settled.start,
       cycles.settled.end,
       on,
-      categories
+      categories,
+      transfers
     )
     const reported = balanceOf(plaidAccounts, on)
 
@@ -187,6 +194,7 @@ export class DashboardService {
           reconciliation: reconcile(transactions, cycles.settled, {
             account: on,
             categories,
+            transfers,
             windowStart: start,
           }),
         },

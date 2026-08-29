@@ -10,7 +10,13 @@
 import type { AllowanceConfig } from "../config"
 import type { LmTransaction } from "../lunchmoney/types"
 import { daysBetween, eachDay, endOfMonth, type IsoDate, startOfMonth } from "./dates"
-import { type Classification, classify, findTransfers, type Policy } from "./policy"
+import {
+  type Classification,
+  classify,
+  findTransfers,
+  type Policy,
+  type TransferIndex,
+} from "./policy"
 
 export interface DayRow {
   date: IsoDate
@@ -69,8 +75,15 @@ export interface ClassifiedTransaction {
  * whose other half falls outside it cannot be matched, so a transfer made today
  * counts as spend until tomorrow's fetch brings its partner in.
  */
-export function classifyAll(txns: LmTransaction[], policy: Policy): ClassifiedTransaction[] {
-  const transfers = findTransfers(txns, policy.categories)
+/**
+ * `transfers` is optional only so a caller that has already built the index can
+ * share it — the statement figures need the same one. Omitted, it is built here.
+ */
+export function classifyAll(
+  txns: LmTransaction[],
+  policy: Policy,
+  transfers: TransferIndex = findTransfers(txns, policy.categories)
+): ClassifiedTransaction[] {
   return txns.map((txn) => ({ txn, classification: classify(txn, policy, transfers) }))
 }
 

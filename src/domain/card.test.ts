@@ -1,23 +1,105 @@
 import { describe, expect, test } from "bun:test"
 import type { LmTransaction } from "../lunchmoney/types"
 import { CARD, CHECKING, TEST_CATEGORIES } from "../test/accounts"
-import { aCharge, anAutopay, anAutopayDebit, aRefund } from "../test/world"
+import {
+  type AutopayOptions,
+  aCharge,
+  anAutopayDebit,
+  anAutopay as anAutopayRow,
+  aRefund,
+} from "../test/world"
 import { cycleTotal as cycleTotalOn, type ReconcileOptions, reconcile as reconcileOn } from "./card"
 import type { Cycle } from "./cycle"
 import { cycleView } from "./cycle"
 import type { IsoDate } from "./dates"
+import { findTransfers } from "./policy"
 
 /**
  * Every statement in this file is the suite's card, so it is bound once here
  * rather than being the last argument of thirty calls.
+ *
+ * `transfers` is threaded from the transactions themselves, exactly as the
+ * dashboard does it — which is what lets the autopay be recognised by its
+ * partner on the bank account rather than by what it was categorised as.
  */
 const cycleTotal = (txns: LmTransaction[], start: IsoDate, end: IsoDate) =>
-  cycleTotalOn(txns, start, end, CARD, TEST_CATEGORIES)
+  cycleTotalOn(txns, start, end, CARD, TEST_CATEGORIES, findTransfers(txns, TEST_CATEGORIES))
 const reconcile = (
   txns: LmTransaction[],
   cycle: Cycle,
-  options: Omit<ReconcileOptions, "account" | "categories"> = {}
-) => reconcileOn(txns, cycle, { ...options, account: CARD, categories: TEST_CATEGORIES })
+  options: Omit<ReconcileOptions, "account" | "categories" | "transfers"> = {}
+) =>
+  reconcileOn(txns, cycle, {
+    ...options,
+    account: CARD,
+    categories: TEST_CATEGORIES,
+    transfers: findTransfers(txns, TEST_CATEGORIES),
+  })
+
+/**
+ * The autopay, categorised as a payment.
+ *
+ * The default fixture is not: on the card, Lunch Money files its own credit as
+ * a transfer, and only the bank debit gets "Credit card payment". These tests
+ * are about the statement *arithmetic*, so they state which row is the payment
+ * and leave the question of recognising it to the tests that are about that —
+ * `an autopay is recognised by its partner when its category does not say so`,
+ * below, and the paired case in policy.test.ts.
+ */
+const anAutopay = (options: AutopayOptions) =>
+  anAutopayRow({ category: "Credit card payment", ...options })
+
+/**
+ * The bug a smoke run found and the suite did not.
+ *
+ * When the payee regexes became categories, the card's own autopay credit
+ * stopped being recognised: Lunch Money files that row as a transfer and only
+ * the *bank* debit gets "Credit card payment". So the credit was no longer
+ * excluded from the cycle, and netted itself out of the bill — a real month
+ * showed $705 against a five-figure reported balance, and the reconciliation
+ * reported "not yet paid" for a statement settled three weeks earlier.
+ *
+ * The suite missed it because the fixture had been given the tidy category.
+ * It now carries what the feed actually sends, and this is the test that says
+ * the partner is what identifies the row.
+ */
+describe("an autopay is recognised by its partner when its category does not say so", () => {
+  const CYCLE = cycleView("2026-08-20", 12, 9).lastClosed
+
+  /** As the feed reports it: card leg a transfer, bank leg the payment. */
+  const legs = [
+    aCharge({ on: "2026-07-20", amount: 1000 }),
+    anAutopayRow({ on: "2026-08-09", amount: 4000 }),
+    anAutopayDebit({ on: "2026-08-09", amount: 4000 }),
+  ]
+
+  test("the payment is left out of the bill rather than netted against it", () => {
+    expect(cycleTotal(legs, CYCLE.start, CYCLE.end).charges).toBe(1000)
+    expect(cycleTotal(legs, CYCLE.start, CYCLE.end).net).toBe(1000)
+  })
+
+  test("and reconciliation finds it, rather than reporting it unpaid", () => {
+    const settled = cycleView("2026-08-20", 12, 9).settled
+    // settled is 06-13..07-12, and its autopay runs on the 9th of the month
+    // after it closes.
+    const paid = [
+      aCharge({ on: "2026-06-20", amount: 4000 }),
+      anAutopayRow({ on: "2026-08-09", amount: 4000 }),
+      anAutopayDebit({ on: "2026-08-09", amount: 4000 }),
+    ]
+    const result = reconcile(paid, settled)
+    expect(result.paid).toBe(4000)
+    expect(result.agrees).toBe(true)
+  })
+
+  test("with no partner and no category, it is not recognised — what the rule prevents", () => {
+    const alone = [
+      aCharge({ on: "2026-07-20", amount: 1000 }),
+      anAutopayRow({ on: "2026-08-09", amount: 4000 }),
+    ]
+    expect(cycleTotal(alone, CYCLE.start, CYCLE.end).credits).toBe(-4000)
+  })
+})
 
 describe("cycle totals", () => {
   test("sums charges and credits on the statement card only", () => {

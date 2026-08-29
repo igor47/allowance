@@ -22,7 +22,7 @@ import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { Cycle } from "./cycle"
 import { addDays, type IsoDate } from "./dates"
-import { isCardPayment, type TransferCategories } from "./policy"
+import { isCardPayment, type TransferCategories, type TransferIndex } from "./policy"
 
 export interface CycleTotal {
   charges: number
@@ -38,13 +38,29 @@ const EMPTY: CycleTotal = { charges: 0, credits: 0, net: 0, count: 0 }
  * and category are not consulted — a $196 hotel deposit is on the bill whether
  * or not it got filed as a transfer — so only payments are taken out.
  */
+/**
+ * Something bought with the card, as opposed to a payment against its balance.
+ *
+ * Two ways to be a payment, and the second is not redundant. The category is
+ * the stated answer, and it is the only one available when the far leg is
+ * outside the window. But on the *card* side the category is unreliable — the
+ * row Lunch Money files as "Credit card payment" is usually the bank debit,
+ * while the card's own credit arrives as a transfer or as income — so a leg
+ * matched to an equal and opposite debit on another account we own is a
+ * payment regardless of what it was called.
+ *
+ * Without the second test a smoke run showed the month's bill as $705 against
+ * a reported balance of five figures: the autopay credit had stopped being
+ * excluded and was netting itself out of the cycle.
+ */
 export function isCardCharge(
   txn: LmTransaction,
   account: string,
-  categories: TransferCategories
+  categories: TransferCategories,
+  transfers?: TransferIndex
 ): boolean {
   if (accountNameOf(txn) !== account) return false
-  return !isCardPayment(txn, categories)
+  return !isCardPayment(txn, categories) && !transfers?.has(txn.id)
 }
 
 export function cycleTotal(
@@ -52,13 +68,14 @@ export function cycleTotal(
   start: IsoDate,
   end: IsoDate,
   account: string,
-  categories: TransferCategories
+  categories: TransferCategories,
+  transfers?: TransferIndex
 ): CycleTotal {
   const total = { ...EMPTY }
   for (const txn of txns) {
     const posted = postedDate(txn)
     if (posted < start || posted > end) continue
-    if (!isCardCharge(txn, account, categories)) continue
+    if (!isCardCharge(txn, account, categories, transfers)) continue
     const amount = Number.parseFloat(txn.amount)
     if (amount > 0) total.charges += amount
     else total.credits += amount
@@ -135,6 +152,12 @@ export interface ReconcileOptions {
   /** Which categories mark the settling payment. */
   categories: TransferCategories
   /**
+   * Matched transfer legs, from `findTransfers()`. The card's own side of an
+   * autopay is routinely categorised as something other than a payment, and
+   * its partner on the bank account is what identifies it.
+   */
+  transfers?: TransferIndex
+  /**
    * The earliest date the caller asked the API for.
    *
    * Given, the data is checked for actually reaching that far back. A window
@@ -150,9 +173,9 @@ export function reconcile(
   cycle: Cycle,
   options: ReconcileOptions
 ): Reconciliation {
-  const { account, categories } = options
+  const { account, categories, transfers } = options
   const onCard = txns.filter((t) => accountNameOf(t) === account)
-  const billed = cycleTotal(txns, cycle.start, cycle.end, account, categories).charges
+  const billed = cycleTotal(txns, cycle.start, cycle.end, account, categories, transfers).charges
 
   const unchecked = {
     checkable: false,
@@ -180,7 +203,8 @@ export function reconcile(
   const windowEnd = addDays(cycle.due, PAYMENT_SLACK_DAYS)
   const payments = onCard.filter((t) => {
     const posted = postedDate(t)
-    return posted > cycle.end && posted <= windowEnd && isCardPayment(t, categories)
+    if (posted <= cycle.end || posted > windowEnd) return false
+    return isCardPayment(t, categories) || !!transfers?.has(t.id)
   })
 
   // Not yet due, or not yet imported. Either way there is nothing to compare.
@@ -194,7 +218,7 @@ export function reconcile(
   const creditsAfterClose = onCard.reduce((sum, t) => {
     const posted = postedDate(t)
     if (posted <= cycle.end || posted > paidOn) return sum
-    if (isCardPayment(t, categories)) return sum
+    if (isCardPayment(t, categories) || transfers?.has(t.id)) return sum
     const amount = Number.parseFloat(t.amount)
     return amount < 0 ? sum + amount : sum
   }, 0)

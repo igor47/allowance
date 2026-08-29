@@ -397,7 +397,11 @@ export function anAutopay(options: AutopayOptions): LmTransaction {
     amount: money(-options.amount),
     payee: "AUTOMATIC PAYMENT - THANK",
     original_name: "AUTOMATIC PAYMENT - THANK YOU",
-    category_name: options.category ?? "Credit card payment",
+    // Not "Credit card payment": on the *card* that is not what arrives. Lunch
+    // Money files the card's own credit as a transfer, or occasionally as
+    // income, and files the bank debit as the payment. A fixture that gave the
+    // card leg the tidy category hid a real bug for exactly one commit.
+    category_name: options.category ?? "Payment, Transfer",
     is_income: options.category === "Income",
     ...accountFields(CARD),
     plaid_metadata: options.posted

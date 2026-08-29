@@ -136,7 +136,10 @@ describe("negative amounts", () => {
   })
 
   test("a card autopay never credits the allowance", () => {
-    expect(classify(anAutopay({ on: "2026-07-09", amount: 9000 })).counts).toBe(false)
+    // Categorised as a payment — the stated answer, and the only one available
+    // when the far leg falls outside the fetched window.
+    const stated = anAutopay({ on: "2026-07-09", amount: 9000, category: "Credit card payment" })
+    expect(classify(stated).counts).toBe(false)
   })
 
   /**
@@ -215,11 +218,13 @@ describe("negative amounts", () => {
     expect(result.amount).toBe(-195)
   })
 
-  test("on the card, a credit is a refund unless the payee says otherwise", () => {
-    // Lunch Money's exclude flag does not decide this. Only the payee does.
+  test("on the card, a credit is a refund unless it is a payment", () => {
+    // Lunch Money's exclude flag does not decide this, and neither does the
+    // payee any more: a category, or a matched partner, is what marks a payment.
     const credit = aRefund({ on: "2026-08-06", amount: 100, excluded: true })
     expect(classify(credit).counts).toBe(true)
-    expect(classify(anAutopay({ on: "2026-08-09", amount: 100 })).counts).toBe(false)
+    const payment = anAutopay({ on: "2026-08-09", amount: 100, category: "Credit card payment" })
+    expect(classify(payment).counts).toBe(false)
   })
 })
 
@@ -308,7 +313,8 @@ describe("Lunch Money's exclude flag on the card", () => {
   })
 
   test("the actual card payment is still excluded", () => {
-    expect(classify(anAutopay({ on: "2026-08-09", amount: 4000 })).counts).toBe(false)
+    const payment = anAutopay({ on: "2026-08-09", amount: 4000, category: "Credit card payment" })
+    expect(classify(payment).counts).toBe(false)
   })
 })
 

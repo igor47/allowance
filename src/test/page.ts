@@ -203,7 +203,19 @@ export class DashboardPage extends Page {
     return new Chart(this.doc)
   }
 
-  /** Click a view chip, the way HTMX would — without losing the month. */
+  /**
+   * Press a chip, following the href the page actually rendered.
+   *
+   * The difference from `filter`/`person` below matters: those ask for a
+   * state directly, while this asks what the bar does when you click it. A
+   * chip is allowed to change more than the parameter it is named after —
+   * the review chip drops the person — and only this can see that.
+   */
+  click(label: string): Promise<DashboardPage> {
+    return this.session.dashboard(this.linkFor(label).replace(/^\//, ""))
+  }
+
+  /** Go straight to a view, keeping whatever else the query holds. */
   filter(name: string): Promise<DashboardPage> {
     return this.session.dashboard(this.withParam("filter", name))
   }

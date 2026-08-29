@@ -318,15 +318,33 @@ export const FilterBar = ({ sel, needsReview }: { sel: Selection; needsReview: n
     <div class="btn-toolbar gap-2 filter-bar" role="toolbar" aria-label="Filter transactions">
       {/* What kind. Selecting the selected one goes back to everything. */}
       <div class="btn-group btn-group-sm">
-        {PRIMARY.map((v) => (
-          <Chip
-            label={VIEW_LABEL[v]}
-            active={sel.view === v}
-            to={linkTo({ ...sel, view: sel.view === v ? "all" : v })}
-          >
-            {v === "review" ? <ReviewCount count={needsReview} /> : null}
-          </Chip>
-        ))}
+        {PRIMARY.map((v) => {
+          const lit = sel.view === v
+          /*
+           * Going to the review queue drops the person, and it is the one
+           * chip that reaches across to the other axis.
+           *
+           * It earns the exception by being the default view: with no
+           * parameters at all the page shows the queue, so a person left
+           * over from the last thing you looked at makes the *home page*
+           * empty. A default that shows nothing is a bug rather than a
+           * preference, and no other view is arrived at by accident.
+           *
+           * Narrowing the queue afterwards still works — click Igor while
+           * it is showing and you get his — because that is a thing you
+           * asked for rather than a thing you inherited.
+           */
+          const who = v === "review" && !lit ? undefined : sel.who
+          return (
+            <Chip
+              label={VIEW_LABEL[v]}
+              active={lit}
+              to={linkTo({ ...sel, view: lit ? "all" : v, who })}
+            >
+              {v === "review" ? <ReviewCount count={needsReview} /> : null}
+            </Chip>
+          )
+        })}
         <button
           type="button"
           class={`btn dropdown-toggle ${secondary ? "btn-secondary" : "btn-outline-secondary"}`}

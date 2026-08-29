@@ -783,14 +783,30 @@ describe("the two filter axes", () => {
     expect(page.linkFor("Igor")).toBe("/?filter=spending")
     // An unlit chip on either axis keeps the other axis as it stands.
     expect(page.linkFor("Serena")).toBe("/?filter=spending&who=serena")
-    expect(page.linkFor("Needs review")).toBe("/?filter=review&who=igor")
+    expect(page.linkFor("Deposits")).toBe("/?filter=deposits&who=igor")
+  })
+
+  test("the review chip is the one that clears the person", async () => {
+    // It is the view you land on with no parameters at all, so a person left
+    // over from the last thing you looked at would empty the home page. That
+    // is a bug rather than a preference, which is what buys the exception —
+    // no other view is arrived at by accident.
+    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    expect(page.linkFor("Needs review")).toBe("/?filter=review")
+
+    // Narrowing the queue on purpose afterwards still works: the chips only
+    // stop carrying a person you did not ask for on this screen.
+    const queue = await page.click("Needs review")
+    expect(queue.activePerson).toBe("")
+    expect(queue.linkFor("Igor")).toBe("/?filter=review&who=igor")
+    expect((await queue.person("igor")).activePerson).toBe("Igor")
   })
 
   test("the review queue is everyone's, and says so when a person hides it", async () => {
-    // The badge counts the whole queue on purpose — it is a call to action,
-    // not a property of whoever is selected. That makes an empty list under a
-    // person filter genuinely confusing unless the page says which axis did
-    // it, so it names them.
+    // Reachable only by narrowing the queue on purpose, now that the review
+    // chip starts clean. The badge still counts the whole queue — it is a call
+    // to action, not a property of whoever is selected — so an empty list here
+    // needs the page to say which axis did it, and it names them.
     const page = await dashboard(tagged(), "?filter=review&who=serena")
     expect(page.reviewCount).toBeGreaterThan(0)
     expect(page.rows).toHaveLength(0)

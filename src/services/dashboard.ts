@@ -253,6 +253,11 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
  * selected chip returns that axis to "everything", and touches nothing else.
  * A chip that reached across and changed the other axis would be a rule to
  * remember; a chip that owns exactly one axis is a rule you cannot get wrong.
+ *
+ * The review chip is the single exception, and `FilterBar` says why: it is
+ * the view you arrive at with no parameters, so a person carried into it
+ * empties the home page. Both axes still cross here — the combination is
+ * expressible and honoured — it is only the chip that starts you clean.
  */
 export const VIEWS = ["review", "spending", "deposits", "irregular", "fixed", "all"] as const
 export type View = (typeof VIEWS)[number]

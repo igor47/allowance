@@ -682,6 +682,41 @@ describe("phone layout", () => {
     for (const c of unlit) expect(c.match(/preview-\w+/g)).toHaveLength(1)
   })
 
+  test("a line that had to be cut carries the whole string in its title", async () => {
+    // Every line in the description cell is one line, so a long descriptor
+    // ends in an ellipsis. The `title` is what makes that reversible, and it
+    // is only worth having on the lines that can actually lose text.
+    const long = "A GROCERY COOP 1745 FOLSOM ST SAN FRANCISCO CA 94103"
+    const page = await dashboard(
+      august().charge({
+        on: "2026-08-13",
+        amount: 246.18,
+        payee: "A Grocery Cooperative",
+        descriptor: long,
+        category: "Groceries",
+      }),
+      "?filter=all"
+    )
+    const row = Array.from(page.doc.querySelectorAll("tbody tr")).find((tr) =>
+      tr.textContent?.includes("Rainbow")
+    )
+    expect(row?.querySelector(".fw-medium")?.getAttribute("title")).toBe(
+      "A Grocery Cooperative"
+    )
+    const lines = Array.from(row?.querySelectorAll(".txn-line") ?? [])
+    expect(lines[0]?.getAttribute("title")).toBe(long)
+    expect(lines[1]?.getAttribute("title")).toBe("Groceries")
+    expect(row?.querySelector(".txn-line .fst-italic")?.getAttribute("title")).toBe(
+      "untagged on Card"
+    )
+    // A line with nothing in it collapses on a phone, so it must stay empty —
+    // a stray whitespace node from the markup would defeat `.txn-line:empty`.
+    const bare = Array.from(page.doc.querySelectorAll(".txn-line")).find(
+      (l) => (l.textContent ?? "") === ""
+    )
+    expect(bare?.hasAttribute("title")).toBe(false)
+  })
+
   test("the sync menu only refuses to wrap on its label rows", async () => {
     // Applying nowrap to every child stretched the queued sentence into one
     // 609px line, which is wider than the phone it opens on.

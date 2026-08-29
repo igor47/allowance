@@ -129,16 +129,35 @@ export const TransactionRow = ({
           ) : null}
         </div>
       </td>
+      {/*
+        Every line here is one line: `text-truncate` on the payee and `nowrap`
+        on the three below it, so a long descriptor ends in an ellipsis rather
+        than growing the row. `title` is what makes the cut reversible — the
+        whole string is a hover away, on the four lines that can lose text.
+
+        Native rather than a Bootstrap tooltip on purpose. `app.js` disposes
+        and rebuilds every tooltip instance on each htmx settle, so four per
+        row over a few hundred rows would make each tag click pay for the whole
+        list. A `title` costs nothing and survives the swap by being markup.
+      */}
       <td>
-        <div class="fw-medium text-truncate">{name}</div>
-        <div class="txn-line small text-secondary font-monospace">{descriptor}</div>
-        <div class="txn-line small text-secondary">{facts.join(" · ")}</div>
+        <div class="fw-medium text-truncate" title={name}>
+          {name}
+        </div>
+        <div class="txn-line small text-secondary font-monospace" title={descriptor ?? undefined}>
+          {descriptor}
+        </div>
+        <div class="txn-line small text-secondary" title={facts.join(" · ")}>
+          {facts.join(" · ")}
+        </div>
         <div class="txn-line small">
           {account !== STATEMENT_ACCOUNT ? (
             <span class="badge text-bg-dark border border-secondary me-1">{account}</span>
           ) : null}
           {txn.is_pending ? <span class="badge text-bg-warning me-1">pending</span> : null}
-          <span class="text-secondary fst-italic">{classification.reason}</span>
+          <span class="text-secondary fst-italic" title={classification.reason}>
+            {classification.reason}
+          </span>
         </div>
       </td>
       <td class={`text-end tabular text-nowrap align-top${credit ? " text-success" : ""}`}>

@@ -150,14 +150,39 @@ export class DashboardPage extends Page {
     return tr ? rowOf(tr as Element) : undefined
   }
 
-  /** The label of the filter currently selected. */
-  get activeFilter(): string {
-    return text(this.doc.querySelector("#txn-list .btn-secondary"))
+  /**
+   * The two axes, as the bar shows them: what kind, and whose.
+   *
+   * `activeView` reads the dropdown's own label when a secondary view is
+   * chosen, which is the assertion that the menu is not hiding the selection.
+   */
+  /*
+   * Scoped to `.filter-bar` throughout: every row carries button groups of its
+   * own for tagging, so an unscoped `.btn-group` finds the last transaction on
+   * the page rather than the filter bar.
+   */
+  get activeView(): string {
+    const chip = this.doc.querySelector(
+      ".filter-bar .btn-group:first-child .btn-secondary:not(.dropdown-toggle)"
+    )
+    const menu = this.doc.querySelector(".filter-bar .dropdown-toggle.btn-secondary")
+    return text(chip ?? menu).replace(/\d+$/, "")
+  }
+
+  /** The person chip that is lit, or "" when the list is not narrowed to one. */
+  get activePerson(): string {
+    return text(this.doc.querySelector(".filter-bar .btn-group:last-child .btn-secondary"))
+  }
+
+  /** Where a chip points, so a test can check what clicking it would do. */
+  linkFor(label: string): string {
+    const chip = all(this.doc, ".filter-bar a").find((a) => text(a).replace(/\d+$/, "") === label)
+    return chip?.getAttribute("href") ?? ""
   }
 
   /** The count on the review filter's badge, or 0 when it is absent. */
   get reviewCount(): number {
-    return Number.parseInt(text(this.doc.querySelector("#txn-list .badge")) || "0", 10)
+    return Number.parseInt(text(this.doc.querySelector("#txn-list #review-count")) || "0", 10)
   }
 
   /** "12 transactions · $340 total · $220 against the allowance". */
@@ -166,16 +191,26 @@ export class DashboardPage extends Page {
   }
 
   get empty(): boolean {
-    return text(this.doc.querySelector("#txn-list p.fst-italic")) === "Nothing here."
+    return text(this.doc.querySelector("#txn-list p.fst-italic")).startsWith("Nothing here")
+  }
+
+  /** The empty-state sentence in full, which names the person when there is one. */
+  get emptyMessage(): string {
+    return text(this.doc.querySelector("#txn-list p.fst-italic"))
   }
 
   get chart(): Chart {
     return new Chart(this.doc)
   }
 
-  /** Click a filter, the way HTMX would — without losing the month. */
+  /** Click a view chip, the way HTMX would — without losing the month. */
   filter(name: string): Promise<DashboardPage> {
     return this.session.dashboard(this.withParam("filter", name))
+  }
+
+  /** Narrow to one person, leaving the view alone. */
+  person(name: string): Promise<DashboardPage> {
+    return this.session.dashboard(this.withParam("who", name))
   }
 
   month(month: string): Promise<DashboardPage> {
@@ -258,6 +293,11 @@ export class TagResult {
 
   get hero(): string {
     return text(this.doc.querySelector("#allowance .hero-number"))
+  }
+
+  /** The review badge that came back with the row, so the queue can shrink. */
+  get reviewCount(): number {
+    return Number.parseInt(text(this.doc.querySelector("#review-count")) || "0", 10)
   }
 
   /** Out-of-band swaps only work if HTMX is told to make them. */

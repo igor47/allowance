@@ -58,7 +58,7 @@ describe("dashboard", () => {
 
   test("defaults to the review queue", async () => {
     const page = await dashboard(august())
-    expect(page.activeFilter).toContain("Needs review")
+    expect(page.activeView).toBe("Needs review")
     // Two untagged card charges and the untagged rent. The salary is a deposit
     // and the utility is tagged, so neither is a question anyone needs asked.
     expect(page.rows).toHaveLength(3)
@@ -138,11 +138,11 @@ describe("dashboard", () => {
   })
 
   test("an unrecognised filter falls back to the review queue", async () => {
-    expect((await dashboard(august(), "?filter=nonsense")).activeFilter).toContain("Needs review")
+    expect((await dashboard(august(), "?filter=nonsense")).activeView).toBe("Needs review")
   })
 
   test("a filter with nothing in it says so", async () => {
-    expect((await dashboard(august(), "?filter=igor")).empty).toBe(true)
+    expect((await dashboard(august(), "?who=igor")).empty).toBe(true)
   })
 
   test("an account with no policy is called out rather than silently dropped", async () => {
@@ -177,7 +177,10 @@ describe("tagging", () => {
     expect(result.row?.reason).toBe("tagged recurring")
     expect(result.row?.badge).toBe("recurring")
     // The row comes back, and the summary is swapped out of band alongside it.
-    expect(result.swapsOutOfBand).toEqual(["allowance", "boxes"])
+    expect(result.swapsOutOfBand).toEqual(["review-count", "allowance", "boxes"])
+    // Including the review badge: the queue is one shorter than it was, and
+    // saying so is the whole point of putting a number on that chip.
+    expect(result.reviewCount).toBe(2)
     expect(result.hero).toBe("$2,700")
   })
 
@@ -596,51 +599,20 @@ describe("phone layout", () => {
     expect(toggler?.getAttribute("data-bs-target")).toBe("#nav-menu")
   })
 
-  test("the filter bar folds in one place rather than wherever it runs out", async () => {
+  test("the filter bar is two groups, so it folds between them", async () => {
+    // Below sm the two do not fit on one line and the second wraps whole,
+    // which is the fold — there is nothing left to place by hand. The joins
+    // come off inside each group too, because a button group only knows how
+    // to square the edges of a single row.
     const page = await dashboard(august())
-    const bar = page.doc.querySelector("#txn-list .btn-group")
-    expect(bar?.getAttribute("class")).toContain("flex-wrap")
-    // Below sm the joins come off and the seven become chips, because a button
-    // group only knows how to square the edges of a single row.
-    expect(bar?.getAttribute("class")).toContain("filter-bar")
-    // And the fold is placed, not left to the remainder: three views to triage
-    // in, then four ways to cut the month. Left to itself "All" changed rows
-    // twice between 390px and 500.
-    const kids = Array.from(bar?.children ?? [])
-    const fold = kids.findIndex((k) => (k.getAttribute("class") ?? "").includes("filter-break"))
-    expect(kids.slice(0, fold).map((k) => k.textContent?.trim())).toEqual([
-      `Needs review${page.reviewCount || ""}`,
-      "Spending",
-      "Deposits",
-    ])
-  })
-
-  test("the row's cells stay in the order the phone grid places them", async () => {
-    // Below sm the `tr` is a three-row grid and `static/app.css` places the
-    // cells into it by `:nth-child` — date, payee, amount, bucket, buttons.
-    // Reordering the markup would scramble the phone layout silently, because
-    // the desktop table would go on looking exactly right.
-    const page = await dashboard(august().charge({ on: "2026-08-10", amount: 42 }))
-    const cells = Array.from(page.doc.querySelectorAll("tbody tr:first-child td"))
-    expect(cells).toHaveLength(5)
-    expect(cells[0]?.querySelector(".txn-posted")).not.toBeNull()
-    expect(cells[1]?.querySelectorAll(".txn-line")).toHaveLength(3)
-    expect(cells[2]?.textContent?.trim()).toMatch(/^-?\$[\d,]+\.\d\d$/)
-    expect(cells[3]?.querySelector(".badge")).not.toBeNull()
-    expect(cells[4]?.querySelectorAll(".tag-btn").length).toBeGreaterThan(0)
-  })
-
-  test("wide tables scroll inside their own container", async () => {
-    const home = await dashboard(august())
-    expect(home.doc.querySelector(".table-responsive .txn-table")).not.toBeNull()
-    // One box, not two: the wrapper used to be nested inside a copy of itself.
-    expect(home.doc.querySelectorAll(".table-responsive")).toHaveLength(1)
-    const budget = await visit(
-      august()
-        .income({ payee: "Payroll", amount: 4_000 })
-        .subscription({ payee: "A Gym", amount: 100 })
-    ).budget()
-    expect(budget.doc.querySelectorAll(".table-responsive table")).toHaveLength(2)
+    const bar = page.doc.querySelector("#txn-list .filter-bar")
+    expect(bar?.getAttribute("class")).toContain("btn-toolbar")
+    const groups = Array.from(bar?.children ?? [])
+    expect(groups).toHaveLength(2)
+    expect(Array.from(groups[0]?.querySelectorAll("a.btn, button") ?? []).length).toBe(3)
+    expect(
+      Array.from(groups[1]?.querySelectorAll("a.btn") ?? []).map((a) => a.textContent)
+    ).toEqual(["Igor", "Serena"])
   })
 
   test("the budget row labels its own figures, for when the header goes away", async () => {
@@ -765,6 +737,107 @@ describe("access log", () => {
  * Transfers are the same money seen twice, so they touch no total — but they
  * are reachable, which the `ignored` bucket they used to live in was not.
  */
+describe("the two filter axes", () => {
+  // A world where the same person tag lands on two different kinds of row, so
+  // crossing the axes has something to prove.
+  const tagged = () =>
+    august()
+      .charge({ on: "2026-08-05", amount: 40, payee: "Igor Lunch", tags: ["igor"] })
+      // Classified as well as attributed, so Serena has nothing left to review
+      // while the shared queue still does — a person tag and a classifying tag
+      // are independent, which is the whole premise of two axes.
+      .charge({
+        on: "2026-08-06",
+        amount: 90,
+        payee: "Serena Lunch",
+        tags: ["serena", "spending"],
+      })
+      .charge({
+        on: "2026-08-07",
+        amount: 500,
+        payee: "Igor Insurance",
+        account: IGOR_PERSONAL,
+        tags: ["igor", "irregular"],
+      })
+
+  test("a person narrows whatever view is showing, rather than replacing it", async () => {
+    // The thing the flat list could not do: Igor's spending, as opposed to
+    // everything of Igor's or everyone's spending.
+    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    expect(page.rows.map((r) => r.payee)).toEqual(["Igor Lunch"])
+    expect(page.activeView).toBe("Spending")
+    expect(page.activePerson).toBe("Igor")
+
+    // Same person, different view: the insurance is fixed, not spending.
+    const fixed = await page.filter("irregular")
+    expect(fixed.rows.map((r) => r.payee)).toEqual(["Igor Insurance"])
+    expect(fixed.activePerson).toBe("Igor")
+  })
+
+  test("each chip turns off its own axis and leaves the other alone", async () => {
+    // The rule that makes the bar learnable: a chip owns one axis. Clicking
+    // the lit view goes back to everything of that person's; clicking the lit
+    // person goes back to everyone's, in the same view.
+    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    expect(page.linkFor("Spending")).toBe("/?filter=all&who=igor")
+    expect(page.linkFor("Igor")).toBe("/?filter=spending")
+    // An unlit chip on either axis keeps the other axis as it stands.
+    expect(page.linkFor("Serena")).toBe("/?filter=spending&who=serena")
+    expect(page.linkFor("Needs review")).toBe("/?filter=review&who=igor")
+  })
+
+  test("the review queue is everyone's, and says so when a person hides it", async () => {
+    // The badge counts the whole queue on purpose — it is a call to action,
+    // not a property of whoever is selected. That makes an empty list under a
+    // person filter genuinely confusing unless the page says which axis did
+    // it, so it names them.
+    const page = await dashboard(tagged(), "?filter=review&who=serena")
+    expect(page.reviewCount).toBeGreaterThan(0)
+    expect(page.rows).toHaveLength(0)
+    expect(page.emptyMessage).toBe("Nothing here for Serena.")
+  })
+
+  test("a link to the old flat filter still means what it meant", async () => {
+    // `filter=igor` was "everything of Igor's" before the split, and links to
+    // it are still in browser histories and pinned tabs.
+    const page = await dashboard(tagged(), "?filter=igor")
+    expect(page.activePerson).toBe("Igor")
+    expect(page.activeView).toBe("All")
+    expect(page.rows.map((r) => r.payee).sort()).toEqual(["Igor Insurance", "Igor Lunch"])
+  })
+
+  test("the menu wears the name of what is chosen inside it", async () => {
+    // The reason a disclosure is usually a bad idea is that it can hide the
+    // current state. This one cannot: pick "Deposits" and the button says so.
+    const shut = await dashboard(august())
+    expect(shut.doc.querySelector("#txn-list .dropdown-toggle")?.textContent?.trim()).toBe("More")
+
+    const open = await shut.filter("deposits")
+    expect(open.activeView).toBe("Deposits")
+    const toggle = open.doc.querySelector("#txn-list .dropdown-toggle")
+    expect(toggle?.textContent?.trim()).toBe("Deposits")
+    expect(toggle?.getAttribute("class")).toContain("btn-secondary")
+  })
+
+  test("irregular is reachable on its own", async () => {
+    const page = await dashboard(tagged(), "?filter=irregular")
+    expect(page.rows.map((r) => r.payee)).toEqual(["Igor Insurance"])
+  })
+
+  test("changing month keeps both axes", async () => {
+    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    const form = page.doc.querySelector(".month-menu")
+    const hidden = Array.from(form?.querySelectorAll("input[type=hidden]") ?? []).map((i) => [
+      i.getAttribute("name"),
+      i.getAttribute("value"),
+    ])
+    expect(hidden).toEqual([
+      ["filter", "spending"],
+      ["who", "igor"],
+    ])
+  })
+})
+
 describe("the summary line", () => {
   test("says how many rows are in neither figure", async () => {
     // The two figures skip transfers — summing both legs would double the

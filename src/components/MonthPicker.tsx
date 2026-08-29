@@ -12,7 +12,9 @@ export interface MonthPickerProps {
   month: string
   /** The latest month that can be asked for, as YYYY-MM. */
   latest: string
+  /** The list selection, carried through so changing month keeps your view. */
   filter?: string
+  who?: string
   /** Where the form submits — the page keeps you on it. */
   action?: string
 }
@@ -37,7 +39,7 @@ export const monthLabel = (month: string): string => {
   return `${MONTHS[Number(m) - 1]} ${year}`
 }
 
-export const MonthPicker = ({ month, latest, filter, action = "/" }: MonthPickerProps) => {
+export const MonthPicker = ({ month, latest, filter, who, action = "/" }: MonthPickerProps) => {
   const [year, m] = month.split("-")
   const firstYear = Number(HISTORY_START.split("-")[0])
   const lastYear = Number(latest.split("-")[0])
@@ -61,6 +63,7 @@ export const MonthPicker = ({ month, latest, filter, action = "/" }: MonthPicker
         data-autosubmit
       >
         {filter ? <input type="hidden" name="filter" value={filter} /> : null}
+        {who ? <input type="hidden" name="who" value={who} /> : null}
         <div class="d-grid gap-2">
           <select class="form-select form-select-sm" name="m" aria-label="Month">
             {MONTHS.map((name, i) => (

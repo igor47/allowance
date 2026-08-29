@@ -5,18 +5,38 @@ import { Layout } from "../components/Layout"
 import { MonthPicker, monthLabel } from "../components/MonthPicker"
 import { Allowance, Boxes, StatementCheck } from "../components/Summary"
 import { Sync } from "../components/Sync"
-import { TransactionList, TransactionRow } from "../components/Transactions"
+import {
+  ReviewCount,
+  type Selection,
+  TransactionList,
+  TransactionRow,
+} from "../components/Transactions"
 import { HISTORY_START } from "../config"
 import { endOfMonth, type IsoDate } from "../domain/dates"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
-import { applyFilter, isFilter, summarise } from "../services/dashboard"
+import { applyFilter, isPerson, isView, summarise } from "../services/dashboard"
 
 export const dashboardRoutes = new Hono<AppEnv>()
 
-const filterOf = (c: { req: { query(name: string): string | undefined } }) => {
-  const value = c.req.query("filter")
-  return isFilter(value) ? value : "review"
+type Query = { req: { query(name: string): string | undefined } }
+
+/**
+ * Which slice of the list is being asked for: what kind, and whose.
+ *
+ * `filter=igor` used to mean "everything of Igor's" — before the two became
+ * separate axes — and links and bookmarks to it may still exist, so a person
+ * arriving on the view parameter is read as one rather than thrown away.
+ */
+const selectionOf = (c: Query, month?: string): Selection => {
+  const filter = c.req.query("filter")
+  const who = c.req.query("who")
+  if (isPerson(filter)) return { view: "all", who: filter, month }
+  return {
+    view: isView(filter) ? filter : "review",
+    who: isPerson(who) ? who : undefined,
+    month,
+  }
 }
 
 interface MonthView {
@@ -60,8 +80,8 @@ dashboardRoutes.get("/", async (c) => {
   const today = c.var.today()
   const view = viewOf(c, today)
   const dashboard = await c.var.service.build(view.asOf)
-  const filter = filterOf(c)
-  const entries = applyFilter(dashboard.transactions, filter)
+  const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
+  const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
 
   // Queue a pull if Lunch Money has not asked Plaid lately. Deliberately not
   // awaited: the fetch is a background job on their side, so blocking the
@@ -78,7 +98,12 @@ dashboardRoutes.get("/", async (c) => {
       page="allowance"
       nav={
         <>
-          <MonthPicker month={view.month} latest={today.slice(0, 7)} filter={filter} />
+          <MonthPicker
+            month={view.month}
+            latest={today.slice(0, 7)}
+            filter={sel.view}
+            who={sel.who}
+          />
           <Sync dashboard={dashboard} />
         </>
       }
@@ -105,10 +130,9 @@ dashboardRoutes.get("/", async (c) => {
       <Boxes dashboard={dashboard} />
       <TransactionList
         entries={entries}
-        filter={filter}
+        sel={sel}
         needsReview={dashboard.needsReview}
         summary={summarise(entries)}
-        month={view.isCurrent ? undefined : view.month}
       />
     </Layout>
   )
@@ -179,12 +203,12 @@ dashboardRoutes.post("/refresh", async (c) => {
 dashboardRoutes.get("/transactions", async (c) => {
   const view = viewOf(c, c.var.today())
   const dashboard = await c.var.service.build(view.asOf)
-  const filter = filterOf(c)
-  const entries = applyFilter(dashboard.transactions, filter)
+  const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
+  const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
   return c.html(
     <TransactionList
       entries={entries}
-      filter={filter}
+      sel={sel}
       needsReview={dashboard.needsReview}
       summary={summarise(entries)}
     />
@@ -220,6 +244,14 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
   return c.html(
     <>
       <TransactionRow entry={updated} month={view.isCurrent ? undefined : view.month} />
+      {/*
+        The count comes back out of band with the row, so the badge falls as
+        the queue does. That is the whole point of the number: a triage
+        session is a sequence of these, and a badge that only settled on a
+        full page load spent the entire session showing a figure from before
+        it started.
+      */}
+      <ReviewCount count={after.needsReview} oob />
       <Allowance dashboard={after} />
       <Boxes dashboard={after} />
     </>

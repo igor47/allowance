@@ -4,10 +4,11 @@ import type { Bucket, TAG } from "../domain/policy"
 import { detailsOf } from "../lunchmoney/details"
 import { accountNameOf } from "../lunchmoney/types"
 import {
-  FILTERS,
-  type Filter,
   type FilterSummary,
   needsReview as isReviewItem,
+  PEOPLE,
+  type Person,
+  type View,
 } from "../services/dashboard"
 import { cents, money, shortDate } from "./format"
 
@@ -21,15 +22,29 @@ const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
   ignored: { label: "ignored", class: "text-bg-dark border border-secondary" },
 }
 
-const FILTER_LABEL: Record<Filter, string> = {
+const VIEW_LABEL: Record<View, string> = {
   review: "Needs review",
   spending: "Spending",
   deposits: "Deposits",
-  all: "All",
+  irregular: "Irregular",
   fixed: "Fixed",
-  igor: "Igor",
-  serena: "Serena",
+  all: "All",
 }
+
+const PERSON_LABEL: Record<Person, string> = { igor: "Igor", serena: "Serena" }
+
+/**
+ * The two you are in most of the time, and the rest a click away.
+ *
+ * Six views and two people is eight chips, which on a phone was two ragged
+ * rows of something you glance at rather than read. The two that carry a
+ * session stay out; the other four go behind a menu — but the menu's button
+ * wears the name of whatever is chosen, so nothing is ever selected without
+ * being visible. A disclosure that can hide the current state is the reason
+ * these are usually a bad idea; one that cannot is just a longer list.
+ */
+const PRIMARY: View[] = ["review", "spending"]
+const SECONDARY: View[] = ["deposits", "irregular", "fixed", "all"]
 
 /** Keyed off the domain's own vocabulary, so a new tag must pick a colour. */
 type TagName = keyof typeof TAG
@@ -224,51 +239,143 @@ export const TransactionRow = ({
   )
 }
 
-export interface TransactionListProps {
+export interface Selection {
+  view: View
+  who?: Person
   /** Set only when a past month is being viewed, so links stay in that month. */
   month?: string
+}
+
+/** Where a chip points. Every link carries the whole selection, both axes. */
+const linkTo = (sel: Selection): string => {
+  const params = new URLSearchParams({ filter: sel.view })
+  if (sel.who) params.set("who", sel.who)
+  if (sel.month) params.set("month", sel.month)
+  return `?${params}`
+}
+
+/**
+ * A filter link swaps the list and leaves the URL saying where you are, so the
+ * back button and a copied link both work. Shared by the chips and the menu,
+ * which differ only in how they are dressed.
+ */
+const goes = (to: string) => ({
+  href: `/${to}`,
+  "hx-get": `/transactions${to}`,
+  "hx-target": "#txn-list",
+  "hx-swap": "outerHTML",
+  "hx-push-url": `/${to}`,
+})
+
+/**
+ * One chip. Clicking the selected one turns its own axis off, which is why
+ * `to` is computed by the caller: only the caller knows which axis it owns.
+ */
+const Chip = ({
+  label,
+  active,
+  to,
+  children,
+}: {
+  label: string
+  active: boolean
+  to: string
+  children?: unknown
+}) => (
+  <a
+    class={`btn ${active ? "btn-secondary" : "btn-outline-secondary"}`}
+    aria-current={active ? "true" : undefined}
+    {...goes(to)}
+  >
+    {label}
+    {children}
+  </a>
+)
+
+/**
+ * The review count, alone, so a tag click can swap it without touching the
+ * rest of the bar. It is the number of things left to do and it drops as you
+ * do them; a badge that only moved on a full page load was quietly wrong for
+ * the whole of a triage session.
+ *
+ * Always rendered, empty when there is nothing left — htmx cannot swap an
+ * element into a page that does not have one to swap.
+ */
+export const ReviewCount = ({ count, oob }: { count: number; oob?: boolean }) => (
+  <span
+    id="review-count"
+    class={`badge text-bg-warning ms-1 ${count > 0 ? "" : "d-none"}`}
+    {...(oob ? { "hx-swap-oob": "true" } : {})}
+  >
+    {count > 0 ? count : ""}
+  </span>
+)
+
+export const FilterBar = ({ sel, needsReview }: { sel: Selection; needsReview: number }) => {
+  const secondary = SECONDARY.includes(sel.view)
+
+  return (
+    <div class="btn-toolbar gap-2 filter-bar" role="toolbar" aria-label="Filter transactions">
+      {/* What kind. Selecting the selected one goes back to everything. */}
+      <div class="btn-group btn-group-sm">
+        {PRIMARY.map((v) => (
+          <Chip
+            label={VIEW_LABEL[v]}
+            active={sel.view === v}
+            to={linkTo({ ...sel, view: sel.view === v ? "all" : v })}
+          >
+            {v === "review" ? <ReviewCount count={needsReview} /> : null}
+          </Chip>
+        ))}
+        <button
+          type="button"
+          class={`btn dropdown-toggle ${secondary ? "btn-secondary" : "btn-outline-secondary"}`}
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          {/* The button says what is chosen, so the menu never hides state. */}
+          {secondary ? VIEW_LABEL[sel.view] : "More"}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {SECONDARY.map((v) => (
+            <li>
+              <a
+                class={`dropdown-item ${sel.view === v ? "active" : ""}`}
+                {...goes(linkTo({ ...sel, view: v }))}
+              >
+                {VIEW_LABEL[v]}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Whose. Independent of the above: this narrows whatever is showing. */}
+      <div class="btn-group btn-group-sm">
+        {PEOPLE.map((p) => (
+          <Chip
+            label={PERSON_LABEL[p]}
+            active={sel.who === p}
+            to={linkTo({ ...sel, who: sel.who === p ? undefined : p })}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export interface TransactionListProps {
+  sel: Selection
   entries: ClassifiedTransaction[]
-  filter: Filter
   needsReview: number
   summary: FilterSummary
 }
 
-export const TransactionList = ({
-  entries,
-  filter,
-  needsReview,
-  summary,
-  month,
-}: TransactionListProps) => (
+export const TransactionList = ({ entries, sel, needsReview, summary }: TransactionListProps) => (
   <div id="txn-list">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
       <h2 class="h6 text-secondary stat-label mb-0">Transactions</h2>
-      {/* Wraps on a phone: seven filters do not fit on one 390px line, and a
-          filter you cannot see is a filter you do not have. Below sm they stop
-          being a joined group and become chips — see `.filter-bar`. */}
-      <div class="btn-group btn-group-sm flex-wrap filter-bar">
-        {FILTERS.map((f) => (
-          <>
-            {/* Below sm the bar folds here rather than wherever the remainder
-                allowed: three views to triage in, four ways to cut the month.
-                Without it "All" changed rows twice between 390px and 500. */}
-            {f === "all" ? <span class="filter-break" aria-hidden="true" /> : null}
-            <a
-              class={`btn ${f === filter ? "btn-secondary" : "btn-outline-secondary"}`}
-              href={`/?filter=${f}${month ? `&month=${month}` : ""}`}
-              hx-get={`/transactions?filter=${f}${month ? `&month=${month}` : ""}`}
-              hx-target="#txn-list"
-              hx-swap="outerHTML"
-              hx-push-url={`/?filter=${f}${month ? `&month=${month}` : ""}`}
-            >
-              {FILTER_LABEL[f]}
-              {f === "review" && needsReview > 0 ? (
-                <span class="badge text-bg-warning ms-1">{needsReview}</span>
-              ) : null}
-            </a>
-          </>
-        ))}
-      </div>
+      <FilterBar sel={sel} needsReview={needsReview} />
     </div>
 
     {/*
@@ -290,13 +397,19 @@ export const TransactionList = ({
     </p>
 
     {entries.length === 0 ? (
-      <p class="text-secondary fst-italic">Nothing here.</p>
+      // Naming the person matters: with two axes it is easy to land on an
+      // empty list because of the one you were not thinking about, and
+      // "Nothing here" would let the review badge say 11 while the page
+      // showed none of them.
+      <p class="text-secondary fst-italic">
+        Nothing here{sel.who ? ` for ${PERSON_LABEL[sel.who]}` : ""}.
+      </p>
     ) : (
       <div class="table-responsive">
         <table class="table table-sm txn-table align-middle mb-0">
           <tbody>
             {entries.map((entry) => (
-              <TransactionRow entry={entry} month={month} />
+              <TransactionRow entry={entry} month={sel.month} />
             ))}
           </tbody>
         </table>

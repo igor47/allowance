@@ -453,33 +453,24 @@
 }
 
 /*
- * Below sm the seven filters do not fit on one line, so they take two — the
- * same two at every width, rather than whichever the remainder happened to
- * allow.
+ * The filter bar is two controls, so it looks like two.
  *
- * Left to wrap on its own the bar reshuffled continuously as the window moved:
- * "All" sat at the end of the first row at 390px, at the start of the second
- * at 430, and back again at 500. `.filter-break` puts the fold in one place,
- * after "Deposits" — three views to triage in, four ways to cut the month —
- * and both rows then stretch to the full width, so the fold reads as a
- * decision rather than as whatever was left over.
+ * It used to be one joined button group of seven, which said "pick one of
+ * these" about two questions that are not exclusive — what kind of
+ * transaction, and whose. Now each axis is its own group, and the fold
+ * between them is structural: at 390px the two groups do not fit on one line
+ * and the second one wraps whole. There is nothing left to place by hand,
+ * which is what the old `.filter-break` spacer was for.
  *
- * A button group only knows how to square the edges of a single row, so its
- * joins would land mid-row here; below sm they come off and the seven become
- * what they already read as, chips.
+ * A button group only knows how to square the edges of a single row, so below
+ * sm the joins come off inside each group too and the buttons become chips.
  */
-.filter-break {
-  display: none;
-}
-
 @media (max-width: 575.98px) {
-  .filter-break {
-    display: block;
-    flex-basis: 100%;
-    height: 0;
+  .filter-bar {
+    gap: 0.35rem;
   }
 
-  .filter-bar {
+  .filter-bar .btn-group {
     gap: 0.35rem;
   }
 
@@ -488,7 +479,7 @@
    * deep (`.btn-group > :not(.btn-check:first-child) + .btn`), which nothing
    * short of restating them can outweigh.
    */
-  .filter-bar > .btn {
+  .filter-bar .btn-group > .btn {
     flex: 1 1 auto;
     margin-left: 0 !important;
     border-radius: var(--bs-border-radius-sm) !important;

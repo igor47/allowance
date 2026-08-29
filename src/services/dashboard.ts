@@ -240,12 +240,32 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
   return { total: cash.reduce((sum, a) => sum + a.balance, 0), accounts: cash }
 }
 
-/** Filters offered in the transaction feed, in the order they are shown. */
-export const FILTERS = ["review", "spending", "deposits", "all", "fixed", "igor", "serena"] as const
-export type Filter = (typeof FILTERS)[number]
+/**
+ * What the list is showing, and whose. Two questions, not one.
+ *
+ * These used to be one flat list of seven, which contradicted the domain:
+ * `PERSON_TAGS` are documented there as "orthogonal to the math", and they
+ * are — a person tag says who spent it, never what kind of spend it was. As
+ * one list you could ask for spending, or for Igor, but never for Igor's
+ * spending, and picking either silently discarded the other.
+ *
+ * Each axis is a radio group that can also be turned off: clicking the
+ * selected chip returns that axis to "everything", and touches nothing else.
+ * A chip that reached across and changed the other axis would be a rule to
+ * remember; a chip that owns exactly one axis is a rule you cannot get wrong.
+ */
+export const VIEWS = ["review", "spending", "deposits", "irregular", "fixed", "all"] as const
+export type View = (typeof VIEWS)[number]
 
-export function isFilter(value: string | undefined): value is Filter {
-  return !!value && (FILTERS as readonly string[]).includes(value)
+export const PEOPLE = ["igor", "serena"] as const
+export type Person = (typeof PEOPLE)[number]
+
+export function isView(value: string | undefined): value is View {
+  return !!value && (VIEWS as readonly string[]).includes(value)
+}
+
+export function isPerson(value: string | undefined): value is Person {
+  return !!value && (PEOPLE as readonly string[]).includes(value)
 }
 
 /**
@@ -295,34 +315,44 @@ export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
   return { count: entries.length, total, counting, excluded }
 }
 
+/**
+ * The two axes, applied in either order — a person tag and a bucket are
+ * independent properties of a row, so intersecting them commutes.
+ */
 export function applyFilter(
   transactions: ClassifiedTransaction[],
-  filter: Filter
+  view: View,
+  who?: Person
 ): ClassifiedTransaction[] {
-  switch (filter) {
+  const mine = who
+    ? transactions.filter((c) => c.txn.tags.some((t) => t.name.toLowerCase() === who))
+    : transactions
+  switch (view) {
     case "review":
-      return transactions.filter(needsReview)
+      return mine.filter(needsReview)
     case "spending":
-      return transactions.filter((c) => c.classification.counts)
+      return mine.filter((c) => c.classification.counts)
     // Money coming back: merchant refunds and bank deposits. This is where a
     // work expense reimbursement is found and tagged.
     case "deposits":
       // Transfers are taggable and often negative — the autopay's card leg, a
       // cashout landing — but they are not money coming back.
-      return transactions.filter(
+      return mine.filter(
         (c) =>
           c.classification.taggable &&
           c.classification.amount < 0 &&
           c.classification.bucket !== "transfer"
       )
+    // The one bucket worth its own view: an irregular is a real commitment that
+    // simply does not recur on a schedule, and it is the hardest to find again
+    // among everything else "fixed" gathers up.
+    case "irregular":
+      return mine.filter((c) => c.classification.bucket === "irregular")
     case "fixed":
-      return transactions.filter((c) =>
+      return mine.filter((c) =>
         ["recurring", "irregular", "unclassified", "transfer"].includes(c.classification.bucket)
       )
-    case "igor":
-    case "serena":
-      return transactions.filter((c) => c.txn.tags.some((t) => t.name.toLowerCase() === filter))
     default:
-      return transactions
+      return mine
   }
 }

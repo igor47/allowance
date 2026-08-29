@@ -43,8 +43,8 @@ export const TEST_CONFIG: Config = {
   historyStart: "2025-01",
   accounts: TEST_ACCOUNTS,
   people: [
-    { tag: "alex", label: "Alex" },
-    { tag: "sam", label: "Sam" },
+    { tag: "alex", label: "Alex", short: "A" },
+    { tag: "sam", label: "Sam", short: "S" },
   ],
 }
 

@@ -1,14 +1,9 @@
+import type { Person } from "../config"
 import type { ClassifiedTransaction } from "../domain/allowance"
 import type { Bucket, TAG } from "../domain/policy"
 import { detailsOf } from "../lunchmoney/details"
 import { accountNameOf } from "../lunchmoney/types"
-import {
-  type FilterSummary,
-  needsReview as isReviewItem,
-  PEOPLE,
-  type Person,
-  type View,
-} from "../services/dashboard"
+import { type FilterSummary, needsReview as isReviewItem, type View } from "../services/dashboard"
 import { cents, money, shortDate } from "./format"
 
 const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
@@ -30,13 +25,11 @@ const VIEW_LABEL: Record<View, string> = {
   all: "All",
 }
 
-const PERSON_LABEL: Record<Person, string> = { igor: "Igor", serena: "Serena" }
-
 /**
  * The two you are in most of the time, and the rest a click away.
  *
- * Six views and two people is eight chips, which on a phone was two ragged
- * rows of something you glance at rather than read. The two that carry a
+ * Six views and a couple of people is eight chips, which on a phone was two
+ * ragged rows of something you glance at rather than read. The two that carry a
  * session stay out; the other four go behind a menu — but the menu's button
  * wears the name of whatever is chosen, so nothing is ever selected without
  * being visible. A disclosure that can hide the current state is the reason
@@ -66,28 +59,36 @@ const TAG_TONE: Record<TagName, { active: string; preview: string }> = {
   recurring: { active: "tag-teal", preview: "preview-teal" },
   irregular: { active: "tag-purple", preview: "preview-purple" },
   transfer: { active: "btn-secondary", preview: "preview-secondary" },
-  igor: { active: "btn-light", preview: "preview-light" },
-  serena: { active: "btn-light", preview: "preview-light" },
 }
+
+/**
+ * People share one neutral tone rather than getting a colour each.
+ *
+ * The classifying colours mean something — they match the badge the row will
+ * wear — and there is no such badge for a person. Giving each household member
+ * a hue would spend the palette on the axis that carries no meaning, and the
+ * config can hold any number of them.
+ */
+const PERSON_TONE = { active: "btn-light", preview: "preview-light" }
 
 const TagButton = ({
   id,
   tag,
   label,
+  tone,
   active,
   month,
 }: {
   id: number
-  tag: TagName
+  tag: string
   label: string
+  tone: { active: string; preview: string }
   active: boolean
   month?: string
 }) => (
   <button
     type="button"
-    class={`btn tag-btn ${
-      active ? TAG_TONE[tag].active : `btn-outline-secondary ${TAG_TONE[tag].preview}`
-    }`}
+    class={`btn tag-btn ${active ? tone.active : `btn-outline-secondary ${tone.preview}`}`}
     hx-post={`/transactions/${id}/tag?tag=${tag}${month ? `&month=${month}` : ""}`}
     hx-target="closest tr"
     hx-swap="outerHTML"
@@ -101,9 +102,12 @@ export const TransactionRow = ({
   entry,
   month,
   card,
+  people,
 }: {
   entry: ClassifiedTransaction
   month?: string
+  /** Who a row can be attributed to. Empty for a household of one. */
+  people: Person[]
   /**
    * The statement card's display name. Rows on it are the common case and get
    * no badge; everything else is worth naming. Absent when no card is
@@ -195,6 +199,7 @@ export const TransactionRow = ({
                 month={month}
                 id={txn.id}
                 tag="spending"
+                tone={TAG_TONE.spending}
                 label="spend"
                 active={tags.includes("spending")}
               />
@@ -202,6 +207,7 @@ export const TransactionRow = ({
                 month={month}
                 id={txn.id}
                 tag="recurring"
+                tone={TAG_TONE.recurring}
                 label="recur"
                 active={tags.includes("recurring")}
               />
@@ -209,6 +215,7 @@ export const TransactionRow = ({
                 month={month}
                 id={txn.id}
                 tag="irregular"
+                tone={TAG_TONE.irregular}
                 label="irreg"
                 active={tags.includes("irregular")}
               />
@@ -216,26 +223,25 @@ export const TransactionRow = ({
                 month={month}
                 id={txn.id}
                 tag="transfer"
+                tone={TAG_TONE.transfer}
                 label="xfer"
                 active={tags.includes("transfer")}
               />
             </div>
-            <div class="btn-group tag-group">
-              <TagButton
-                month={month}
-                id={txn.id}
-                tag="igor"
-                label="I"
-                active={tags.includes("igor")}
-              />
-              <TagButton
-                month={month}
-                id={txn.id}
-                tag="serena"
-                label="S"
-                active={tags.includes("serena")}
-              />
-            </div>
+            {people.length > 0 ? (
+              <div class="btn-group tag-group">
+                {people.map((person) => (
+                  <TagButton
+                    month={month}
+                    id={txn.id}
+                    tag={person.tag}
+                    tone={PERSON_TONE}
+                    label={person.short}
+                    active={tags.includes(person.tag)}
+                  />
+                ))}
+              </div>
+            ) : null}
           </>
         ) : (
           <span class="small text-secondary fst-italic">not taggable</span>
@@ -247,7 +253,8 @@ export const TransactionRow = ({
 
 export interface Selection {
   view: View
-  who?: Person
+  /** A person's tag, or undefined for everybody. */
+  who?: string
   /** Set only when a past month is being viewed, so links stay in that month. */
   month?: string
 }
@@ -317,7 +324,15 @@ export const ReviewCount = ({ count, oob }: { count: number; oob?: boolean }) =>
   </span>
 )
 
-export const FilterBar = ({ sel, needsReview }: { sel: Selection; needsReview: number }) => {
+export const FilterBar = ({
+  sel,
+  needsReview,
+  people,
+}: {
+  sel: Selection
+  needsReview: number
+  people: Person[]
+}) => {
   const secondary = SECONDARY.includes(sel.view)
 
   return (
@@ -375,15 +390,17 @@ export const FilterBar = ({ sel, needsReview }: { sel: Selection; needsReview: n
       </div>
 
       {/* Whose. Independent of the above: this narrows whatever is showing. */}
-      <div class="btn-group btn-group-sm">
-        {PEOPLE.map((p) => (
-          <Chip
-            label={PERSON_LABEL[p]}
-            active={sel.who === p}
-            to={linkTo({ ...sel, who: sel.who === p ? undefined : p })}
-          />
-        ))}
-      </div>
+      {people.length > 0 ? (
+        <div class="btn-group btn-group-sm">
+          {people.map((person) => (
+            <Chip
+              label={person.label}
+              active={sel.who === person.tag}
+              to={linkTo({ ...sel, who: sel.who === person.tag ? undefined : person.tag })}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -395,6 +412,8 @@ export interface TransactionListProps {
   summary: FilterSummary
   /** The statement card's display name; see `TransactionRow`. */
   card?: string
+  /** Who a row can be attributed to. Empty for a household of one. */
+  people: Person[]
 }
 
 export const TransactionList = ({
@@ -403,11 +422,12 @@ export const TransactionList = ({
   needsReview,
   summary,
   card,
+  people,
 }: TransactionListProps) => (
   <div id="txn-list">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
       <h2 class="h6 text-secondary stat-label mb-0">Transactions</h2>
-      <FilterBar sel={sel} needsReview={needsReview} />
+      <FilterBar sel={sel} needsReview={needsReview} people={people} />
     </div>
 
     {/*
@@ -434,14 +454,15 @@ export const TransactionList = ({
       // "Nothing here" would let the review badge say 11 while the page
       // showed none of them.
       <p class="text-secondary fst-italic">
-        Nothing here{sel.who ? ` for ${PERSON_LABEL[sel.who]}` : ""}.
+        Nothing here
+        {sel.who ? ` for ${people.find((p) => p.tag === sel.who)?.label ?? sel.who}` : ""}.
       </p>
     ) : (
       <div class="table-responsive">
         <table class="table table-sm txn-table align-middle mb-0">
           <tbody>
             {entries.map((entry) => (
-              <TransactionRow entry={entry} month={sel.month} card={card} />
+              <TransactionRow entry={entry} month={sel.month} card={card} people={people} />
             ))}
           </tbody>
         </table>

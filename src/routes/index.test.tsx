@@ -142,7 +142,7 @@ describe("dashboard", () => {
   })
 
   test("a filter with nothing in it says so", async () => {
-    expect((await dashboard(august(), "?who=igor")).empty).toBe(true)
+    expect((await dashboard(august(), "?who=alex")).empty).toBe(true)
   })
 
   test("an account with no policy is called out rather than silently dropped", async () => {
@@ -206,11 +206,11 @@ describe("tagging", () => {
     const id = anUntaggedCharge(world)
     const session = visit(world)
 
-    expect((await session.dashboard("?filter=serena")).rows).toHaveLength(0)
-    await session.tag(id, "serena")
-    expect(session.client.writes.at(-1)?.tags).toEqual(["serena"])
+    expect((await session.dashboard("?filter=sam")).rows).toHaveLength(0)
+    await session.tag(id, "sam")
+    expect(session.client.writes.at(-1)?.tags).toEqual(["sam"])
 
-    const after = await session.dashboard("?filter=serena")
+    const after = await session.dashboard("?filter=sam")
     expect(after.rows.map((r) => r.payee)).toEqual(["A Restaurant"])
     // Still counting, still unreviewed: who spent it is a separate question.
     expect(after.rows[0]?.badge).toBe("spending")
@@ -612,7 +612,7 @@ describe("phone layout", () => {
     expect(Array.from(groups[0]?.querySelectorAll("a.btn, button") ?? []).length).toBe(3)
     expect(
       Array.from(groups[1]?.querySelectorAll("a.btn") ?? []).map((a) => a.textContent)
-    ).toEqual(["Igor", "Serena"])
+    ).toEqual(["Alex", "Sam"])
   })
 
   test("the budget row labels its own figures, for when the header goes away", async () => {
@@ -703,11 +703,11 @@ describe("phone layout", () => {
 describe("access log", () => {
   test("says who asked for what, and how it went", async () => {
     const session = visit(august())
-    await session.get("/budget?month=2026-07", { headers: { "X-authentik-username": "igor47" } })
+    await session.get("/budget?month=2026-07", { headers: { "X-authentik-username": "alex" } })
 
     expect(session.logs).toHaveLength(1)
     expect(session.logs[0]).toMatch(
-      /^\d{4}-\d{2}-\d{2}T[\d:.]+Z GET \/budget\?month=2026-07 200 \d+ms user=igor47$/
+      /^\d{4}-\d{2}-\d{2}T[\d:.]+Z GET \/budget\?month=2026-07 200 \d+ms user=alex$/
     )
   })
 
@@ -742,48 +742,48 @@ describe("the two filter axes", () => {
   // crossing the axes has something to prove.
   const tagged = () =>
     august()
-      .charge({ on: "2026-08-05", amount: 40, payee: "Igor Lunch", tags: ["igor"] })
-      // Classified as well as attributed, so Serena has nothing left to review
+      .charge({ on: "2026-08-05", amount: 40, payee: "Alex Lunch", tags: ["alex"] })
+      // Classified as well as attributed, so Sam has nothing left to review
       // while the shared queue still does — a person tag and a classifying tag
       // are independent, which is the whole premise of two axes.
       .charge({
         on: "2026-08-06",
         amount: 90,
-        payee: "Serena Lunch",
-        tags: ["serena", "spending"],
+        payee: "Sam Lunch",
+        tags: ["sam", "spending"],
       })
       .charge({
         on: "2026-08-07",
         amount: 500,
-        payee: "Igor Insurance",
+        payee: "Alex Insurance",
         account: CHECKING,
-        tags: ["igor", "irregular"],
+        tags: ["alex", "irregular"],
       })
 
   test("a person narrows whatever view is showing, rather than replacing it", async () => {
-    // The thing the flat list could not do: Igor's spending, as opposed to
-    // everything of Igor's or everyone's spending.
-    const page = await dashboard(tagged(), "?filter=spending&who=igor")
-    expect(page.rows.map((r) => r.payee)).toEqual(["Igor Lunch"])
+    // The thing the flat list could not do: Alex's spending, as opposed to
+    // everything of Alex's or everyone's spending.
+    const page = await dashboard(tagged(), "?filter=spending&who=alex")
+    expect(page.rows.map((r) => r.payee)).toEqual(["Alex Lunch"])
     expect(page.activeView).toBe("Spending")
-    expect(page.activePerson).toBe("Igor")
+    expect(page.activePerson).toBe("Alex")
 
     // Same person, different view: the insurance is fixed, not spending.
     const fixed = await page.filter("irregular")
-    expect(fixed.rows.map((r) => r.payee)).toEqual(["Igor Insurance"])
-    expect(fixed.activePerson).toBe("Igor")
+    expect(fixed.rows.map((r) => r.payee)).toEqual(["Alex Insurance"])
+    expect(fixed.activePerson).toBe("Alex")
   })
 
   test("each chip turns off its own axis and leaves the other alone", async () => {
     // The rule that makes the bar learnable: a chip owns one axis. Clicking
     // the lit view goes back to everything of that person's; clicking the lit
     // person goes back to everyone's, in the same view.
-    const page = await dashboard(tagged(), "?filter=spending&who=igor")
-    expect(page.linkFor("Spending")).toBe("/?filter=all&who=igor")
-    expect(page.linkFor("Igor")).toBe("/?filter=spending")
+    const page = await dashboard(tagged(), "?filter=spending&who=alex")
+    expect(page.linkFor("Spending")).toBe("/?filter=all&who=alex")
+    expect(page.linkFor("Alex")).toBe("/?filter=spending")
     // An unlit chip on either axis keeps the other axis as it stands.
-    expect(page.linkFor("Serena")).toBe("/?filter=spending&who=serena")
-    expect(page.linkFor("Deposits")).toBe("/?filter=deposits&who=igor")
+    expect(page.linkFor("Sam")).toBe("/?filter=spending&who=sam")
+    expect(page.linkFor("Deposits")).toBe("/?filter=deposits&who=alex")
   })
 
   test("the review chip is the one that clears the person", async () => {
@@ -791,15 +791,15 @@ describe("the two filter axes", () => {
     // over from the last thing you looked at would empty the home page. That
     // is a bug rather than a preference, which is what buys the exception —
     // no other view is arrived at by accident.
-    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    const page = await dashboard(tagged(), "?filter=spending&who=alex")
     expect(page.linkFor("Needs review")).toBe("/?filter=review")
 
     // Narrowing the queue on purpose afterwards still works: the chips only
     // stop carrying a person you did not ask for on this screen.
     const queue = await page.click("Needs review")
     expect(queue.activePerson).toBe("")
-    expect(queue.linkFor("Igor")).toBe("/?filter=review&who=igor")
-    expect((await queue.person("igor")).activePerson).toBe("Igor")
+    expect(queue.linkFor("Alex")).toBe("/?filter=review&who=alex")
+    expect((await queue.person("alex")).activePerson).toBe("Alex")
   })
 
   test("the review queue is everyone's, and says so when a person hides it", async () => {
@@ -807,19 +807,19 @@ describe("the two filter axes", () => {
     // chip starts clean. The badge still counts the whole queue — it is a call
     // to action, not a property of whoever is selected — so an empty list here
     // needs the page to say which axis did it, and it names them.
-    const page = await dashboard(tagged(), "?filter=review&who=serena")
+    const page = await dashboard(tagged(), "?filter=review&who=sam")
     expect(page.reviewCount).toBeGreaterThan(0)
     expect(page.rows).toHaveLength(0)
-    expect(page.emptyMessage).toBe("Nothing here for Serena.")
+    expect(page.emptyMessage).toBe("Nothing here for Sam.")
   })
 
   test("a link to the old flat filter still means what it meant", async () => {
-    // `filter=igor` was "everything of Igor's" before the split, and links to
+    // `filter=alex` was "everything of Alex's" before the split, and links to
     // it are still in browser histories and pinned tabs.
-    const page = await dashboard(tagged(), "?filter=igor")
-    expect(page.activePerson).toBe("Igor")
+    const page = await dashboard(tagged(), "?filter=alex")
+    expect(page.activePerson).toBe("Alex")
     expect(page.activeView).toBe("All")
-    expect(page.rows.map((r) => r.payee).sort()).toEqual(["Igor Insurance", "Igor Lunch"])
+    expect(page.rows.map((r) => r.payee).sort()).toEqual(["Alex Insurance", "Alex Lunch"])
   })
 
   test("the menu wears the name of what is chosen inside it", async () => {
@@ -837,11 +837,11 @@ describe("the two filter axes", () => {
 
   test("irregular is reachable on its own", async () => {
     const page = await dashboard(tagged(), "?filter=irregular")
-    expect(page.rows.map((r) => r.payee)).toEqual(["Igor Insurance"])
+    expect(page.rows.map((r) => r.payee)).toEqual(["Alex Insurance"])
   })
 
   test("changing month keeps both axes", async () => {
-    const page = await dashboard(tagged(), "?filter=spending&who=igor")
+    const page = await dashboard(tagged(), "?filter=spending&who=alex")
     const form = page.doc.querySelector(".month-menu")
     const hidden = Array.from(form?.querySelectorAll("input[type=hidden]") ?? []).map((i) => [
       i.getAttribute("name"),
@@ -849,7 +849,7 @@ describe("the two filter axes", () => {
     ])
     expect(hidden).toEqual([
       ["filter", "spending"],
-      ["who", "igor"],
+      ["who", "alex"],
     ])
   })
 })

@@ -30,8 +30,14 @@ export interface AllowanceConfig {
 export interface Person {
   /** The tag written back to Lunch Money. */
   tag: string
-  /** What the button says. */
+  /** What the filter chip says. */
   label: string
+  /**
+   * What the per-row button says — there is room for about one character.
+   * Defaults to the first letter of the label, which is only wrong for a
+   * household whose names collide, so the config can override it.
+   */
+  short: string
 }
 
 export interface Config {
@@ -175,7 +181,9 @@ function peopleOf(source: string, raw: unknown): Person[] {
     if (people.some((p) => p.tag === tag)) {
       throw new ConfigError(source, `two people share the tag "${tag}"`)
     }
-    people.push({ tag, label: str(source, entry, "label") })
+    const label = str(source, entry, "label")
+    const short = entry.short === undefined ? label.slice(0, 1) : str(source, entry, "short")
+    people.push({ tag, label, short: short.toUpperCase() })
   }
   return people
 }

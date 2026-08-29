@@ -21,20 +21,23 @@
 import { accountNameOf, type LmTransaction } from "../lunchmoney/types"
 import { daysBetween } from "./dates"
 
+/**
+ * The tags that mean something to the allowance.
+ *
+ * Fixed vocabulary, not configuration: each one is a branch in `classify()`
+ * below, so a household cannot invent a sixth without writing the rule that
+ * reads it. Person tags are the opposite — they are configuration, they say
+ * who spent it rather than what it was, and nothing here consults them.
+ */
 export const TAG = {
   recurring: "recurring",
   irregular: "irregular",
   spending: "spending",
   transfer: "transfer",
-  igor: "igor",
-  serena: "serena",
 } as const
 
 /** Tags that classify a transaction for allowance purposes. */
 export const CLASSIFYING_TAGS: string[] = [TAG.recurring, TAG.irregular, TAG.spending, TAG.transfer]
-
-/** Tags that attribute a transaction to a person. Orthogonal to the math. */
-export const PERSON_TAGS: string[] = [TAG.igor, TAG.serena]
 
 /**
  * What an *untagged* transaction on this account means. A tag beats it; this is

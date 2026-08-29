@@ -33,7 +33,10 @@ history_start = "2025-01"
 # Person tags are orthogonal to the math — they say who spent it, never what
 # kind of spend it was — so adding someone here adds a button to every row and
 # changes no number. `tag` is what gets written back to Lunch Money; `label` is
-# what the button says. Leave the list empty and the buttons disappear.
+# what the filter chip says. The per-row button has room for about one
+# character and uses the first letter of the label, unless `short` says
+# otherwise — which matters only for a household whose names collide. Leave the
+# list empty and the buttons disappear.
 [[people]]
 tag = "alex"
 label = "Alex"
@@ -41,6 +44,7 @@ label = "Alex"
 [[people]]
 tag = "sam"
 label = "Sam"
+short = "S"
 
 
 # The accounts, keyed by the display name Lunch Money gives them.

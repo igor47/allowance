@@ -1,6 +1,6 @@
 /** Assembles everything the dashboard renders, from two API calls. */
 
-import type { Config } from "../config"
+import type { Config, Person } from "../config"
 import {
   type AllowanceResult,
   type ClassifiedTransaction,
@@ -251,11 +251,11 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
 /**
  * What the list is showing, and whose. Two questions, not one.
  *
- * These used to be one flat list of seven, which contradicted the domain:
- * `PERSON_TAGS` are documented there as "orthogonal to the math", and they
- * are — a person tag says who spent it, never what kind of spend it was. As
- * one list you could ask for spending, or for Igor, but never for Igor's
- * spending, and picking either silently discarded the other.
+ * These used to be one flat list, which contradicted the domain: person tags
+ * are documented there as orthogonal to the math, and they are — a person tag
+ * says who spent it, never what kind of spend it was. As one list you could
+ * ask for spending, or for one person, but never for that person's spending,
+ * and picking either silently discarded the other.
  *
  * Each axis is a radio group that can also be turned off: clicking the
  * selected chip returns that axis to "everything", and touches nothing else.
@@ -270,15 +270,19 @@ function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: Ca
 export const VIEWS = ["review", "spending", "deposits", "irregular", "fixed", "all"] as const
 export type View = (typeof VIEWS)[number]
 
-export const PEOPLE = ["igor", "serena"] as const
-export type Person = (typeof PEOPLE)[number]
-
 export function isView(value: string | undefined): value is View {
   return !!value && (VIEWS as readonly string[]).includes(value)
 }
 
-export function isPerson(value: string | undefined): value is Person {
-  return !!value && (PEOPLE as readonly string[]).includes(value)
+/**
+ * Is this a person the config knows about?
+ *
+ * The guard is what stops `?who=` from being an arbitrary tag lookup: an
+ * unrecognised value falls back to "everybody" rather than filtering the list
+ * down to nothing and looking like a bug.
+ */
+export function isPerson(value: string | undefined, people: Person[]): boolean {
+  return !!value && people.some((p) => p.tag === value)
 }
 
 /**
@@ -335,7 +339,8 @@ export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
 export function applyFilter(
   transactions: ClassifiedTransaction[],
   view: View,
-  who?: Person
+  /** A person's tag, already validated by `isPerson()`. */
+  who?: string
 ): ClassifiedTransaction[] {
   const mine = who
     ? transactions.filter((c) => c.txn.tags.some((t) => t.name.toLowerCase() === who))

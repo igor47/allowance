@@ -11,6 +11,7 @@ import {
   TransactionList,
   TransactionRow,
 } from "../components/Transactions"
+import type { Person } from "../config"
 import { endOfMonth, type IsoDate } from "../domain/dates"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
@@ -27,13 +28,13 @@ type Query = { req: { query(name: string): string | undefined } }
  * separate axes — and links and bookmarks to it may still exist, so a person
  * arriving on the view parameter is read as one rather than thrown away.
  */
-const selectionOf = (c: Query, month?: string): Selection => {
+const selectionOf = (c: Query, people: Person[], month?: string): Selection => {
   const filter = c.req.query("filter")
   const who = c.req.query("who")
-  if (isPerson(filter)) return { view: "all", who: filter, month }
+  if (isPerson(filter, people)) return { view: "all", who: filter, month }
   return {
     view: isView(filter) ? filter : "review",
-    who: isPerson(who) ? who : undefined,
+    who: isPerson(who, people) ? who : undefined,
     month,
   }
 }
@@ -80,7 +81,7 @@ dashboardRoutes.get("/", async (c) => {
   const today = c.var.today()
   const view = viewOf(c, today, c.var.config.historyStart)
   const dashboard = await c.var.service.build(view.asOf)
-  const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
+  const sel = selectionOf(c, c.var.config.people, view.isCurrent ? undefined : view.month)
   const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
 
   // Queue a pull if Lunch Money has not asked Plaid lately. Deliberately not
@@ -135,6 +136,7 @@ dashboardRoutes.get("/", async (c) => {
         needsReview={dashboard.needsReview}
         summary={summarise(entries)}
         card={dashboard.card.account}
+        people={c.var.config.people}
       />
     </Layout>
   )
@@ -210,7 +212,7 @@ dashboardRoutes.post("/refresh", async (c) => {
 dashboardRoutes.get("/transactions", async (c) => {
   const view = viewOf(c, c.var.today(), c.var.config.historyStart)
   const dashboard = await c.var.service.build(view.asOf)
-  const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
+  const sel = selectionOf(c, c.var.config.people, view.isCurrent ? undefined : view.month)
   const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
   return c.html(
     <TransactionList
@@ -219,6 +221,7 @@ dashboardRoutes.get("/transactions", async (c) => {
       needsReview={dashboard.needsReview}
       summary={summarise(entries)}
       card={dashboard.card.account}
+      people={c.var.config.people}
     />
   )
 })
@@ -233,7 +236,10 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
 
   let action: ReturnType<typeof parseTagAction>
   try {
-    action = parseTagAction(c.req.query("tag") ?? "")
+    action = parseTagAction(
+      c.req.query("tag") ?? "",
+      c.var.config.people.map((p) => p.tag)
+    )
   } catch {
     return c.text("unknown tag", 400)
   }
@@ -255,6 +261,7 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
         entry={updated}
         month={view.isCurrent ? undefined : view.month}
         card={after.card.account}
+        people={c.var.config.people}
       />
       {/*
         The count comes back out of band with the row, so the badge falls as

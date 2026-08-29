@@ -113,7 +113,7 @@ describe("tags", () => {
   })
 
   test("person tags do not affect the math", () => {
-    const tagged = classify(aCharge({ on: "2026-08-05", amount: 60, tags: ["serena"] }))
+    const tagged = classify(aCharge({ on: "2026-08-05", amount: 60, tags: ["sam"] }))
     expect(tagged.counts).toBe(true)
     expect(tagged.reviewed).toBe(false)
   })
@@ -282,8 +282,8 @@ describe("the wallet", () => {
   })
 
   test("funding the wallet from the bank is a question, not an answer", () => {
-    // `^venmo$` used to ignore these outright. It could not tell Igor's wallet
-    // (tracked, so the spend lands there) from Serena's (not tracked, so this
+    // `^venmo$` used to ignore these outright. It could not tell a tracked
+    // wallet (the spend lands there) from an untracked one (so this
     // row is the only record) — same payee, same category, opposite meaning.
     // Only a human knows, so it goes to review instead of being swallowed.
     const topUp = classify(

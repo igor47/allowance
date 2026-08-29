@@ -48,7 +48,7 @@ describe("a valid config", () => {
 
   test("person tags are lowercased, because Lunch Money's are compared that way", () => {
     const config = parse(`${MINIMAL}\n[[people]]\ntag = "Alex"\nlabel = "Alex"\n`)
-    expect(config.people).toEqual([{ tag: "alex", label: "Alex" }])
+    expect(config.people).toEqual([{ tag: "alex", label: "Alex", short: "A" }])
   })
 
   test("a config with no card at all still parses — the allowance does not need one", () => {

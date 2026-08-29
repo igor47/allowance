@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { nextTags, parseTagAction } from "./tagging"
 
-const classify = (tag: string) => parseTagAction(tag)
+/** The suite's household, standing in for whatever `allowance.toml` says. */
+const PEOPLE = ["alex", "sam"]
+
+const classify = (tag: string) => parseTagAction(tag, PEOPLE)
 
 describe("classifying tags", () => {
   test("tagging an unreviewed transaction sets one tag", () => {
@@ -22,24 +25,24 @@ describe("classifying tags", () => {
   })
 
   test("person tags survive a reclassification", () => {
-    expect(nextTags(["spending", "serena"], classify("irregular")).sort()).toEqual([
+    expect(nextTags(["spending", "sam"], classify("irregular")).sort()).toEqual([
       "irregular",
-      "serena",
+      "sam",
     ])
   })
 })
 
 describe("person tags", () => {
   test("toggle independently of the classification", () => {
-    expect(nextTags(["spending"], classify("igor")).sort()).toEqual(["igor", "spending"])
-    expect(nextTags(["spending", "igor"], classify("igor"))).toEqual(["spending"])
+    expect(nextTags(["spending"], classify("alex")).sort()).toEqual(["alex", "spending"])
+    expect(nextTags(["spending", "alex"], classify("alex"))).toEqual(["spending"])
   })
 
   test("both people can be on one transaction", () => {
-    expect(nextTags(["igor"], classify("serena")).sort()).toEqual(["igor", "serena"])
+    expect(nextTags(["alex"], classify("sam")).sort()).toEqual(["alex", "sam"])
   })
 })
 
 test("unknown tags are rejected rather than written to Lunch Money", () => {
-  expect(() => parseTagAction("groceries")).toThrow("unknown tag")
+  expect(() => parseTagAction("groceries", PEOPLE)).toThrow("unknown tag")
 })

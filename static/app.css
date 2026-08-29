@@ -40,10 +40,20 @@
   opacity: 0.55;
 }
 
+/*
+ * Sized for a mouse, which still means bigger than this was.
+ *
+ * These were 22px tall and, for "I" and "S", 19px wide — a 19px target for the
+ * two buttons that get pressed on nearly every row of a triage session. The
+ * min-width is what stops a one-letter label from being half a button; the
+ * height now lands within a couple of pixels of the filter chips above, which
+ * were always the right size.
+ */
 .tag-btn {
-  --bs-btn-padding-y: 0.1rem;
-  --bs-btn-padding-x: 0.4rem;
-  --bs-btn-font-size: 0.72rem;
+  --bs-btn-padding-y: 0.3rem;
+  --bs-btn-padding-x: 0.5rem;
+  --bs-btn-font-size: 0.75rem;
+  min-width: 2.25rem;
 }
 
 /*
@@ -216,10 +226,17 @@
  *   filter chips   the seven at their natural width are 522px
  *   budget table   min-content 409px — its columns are all short words
  *
- * The transaction table is the exception, and switches at 880px. Its four
- * fixed columns come to 32rem, and the description column stops identifying
- * anything much under 300px: 512 + 300 + 24 of container padding is 836, so
- * 880 clears it with slack. Below that the row stacks.
+ * The transaction table is the exception, and switches at 900px. Its four
+ * fixed columns come to 35.5rem, and the description column stops identifying
+ * anything much under 300px: 568 + 300 + 24 of container padding is 892, so
+ * 900 clears it. Below that the row stacks.
+ *
+ * That is a number Bootstrap does not have, and it is deliberately ours: the
+ * table's width is set by six tag buttons and a payee, which is not a fact
+ * about anybody's grid. It only ever appears in this file — no Bootstrap
+ * utility class keys off it — so it costs nothing to hold. It also moves when
+ * the content does: growing the tag buttons to a usable size took it from 880
+ * to 900, which is the arithmetic above doing its job.
  *
  * That table used to switch at sm, which was wrong by 450px. Its intrinsic
  * width is 983px, so from 576 all the way to about 1020 it overflowed its own
@@ -239,7 +256,7 @@
  * content plus a little: the six buttons measure 208px, "unclassified" is the
  * widest badge, and the description gets whatever is left over.
  */
-@media (min-width: 880px) {
+@media (min-width: 900px) {
   .txn-table {
     table-layout: fixed;
   }
@@ -257,7 +274,7 @@
   }
 
   .txn-table td:nth-child(5) {
-    width: 14.5rem;
+    width: 18rem;
   }
 }
 
@@ -279,7 +296,7 @@
  * same kind, which leaves the whole width to the buttons — and the whole width
  * is what makes them a 36px tap target rather than a 20px one.
  */
-@media (max-width: 879.98px) {
+@media (max-width: 899.98px) {
   .txn-table tr {
     display: grid;
     grid-template-columns: auto 1fr auto;

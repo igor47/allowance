@@ -52,8 +52,14 @@ than guessing from payees. Two rules:
 | payee contains `AUTOMATIC PAYMENT` (or whatever your issuer writes) | `Credit card payment` | Lunch Money files most autopays here already, but the occasional one arrives as "Income" — and read alone, that is a large refund crediting your allowance |
 | the payee your brokerage uses for core-account sweeps | `Internal sweep` (create it) | A brokerage cash account sweeps money in and out of a money-market position on every movement, so each real transaction arrives paired with a bookkeeping row. Both halves look identical to a genuine deposit; only a rule separates them |
 
-Rules have no API in either v1 or v2, so they have to be made in Lunch Money's
-own app. That is the point: they live where the data lives, they are visible,
+The *categories* those rules point at can be created for you —
+`mise run configure:lunchmoney` reads your `[categories]` and makes anything
+missing, excluded from Lunch Money's own budget and totals so the autopay is
+not counted there beside the charges it settles. It prints a plan and changes
+nothing until `APPLY=1`.
+
+The *rules* have no API in either v1 or v2, so they have to be made in Lunch
+Money's own app. That is the point: they live where the data lives, they are visible,
 and you can edit them from your phone — which a regex compiled into this app
 never was.
 
@@ -186,6 +192,7 @@ scripts.
 | `mise run check:fix` | auto-fix, then typecheck |
 | `mise run test` | offline tests — never touches the live API |
 | `mise run image` | build the container image locally |
+| `mise run configure:lunchmoney` | create the `[categories]` categories and exclude them; dry run unless `APPLY=1` |
 | `mise run smoke` | print the live numbers as text (manual) |
 
 Tests are offline and entirely synthetic — there is no recorded data in this

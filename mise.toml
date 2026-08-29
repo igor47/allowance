@@ -40,6 +40,10 @@ run = "NODE_ENV=test bun test"
 description = "Serve the app over a synthetic world, for looking at the UI (no API)"
 run = "bun run --watch scripts/preview.ts"
 
+[tasks."configure:lunchmoney"]
+description = "Reconcile Lunch Money's categories to allowance.toml; dry run unless APPLY=1"
+run = "bun run scripts/configure-lunchmoney.ts"
+
 [tasks.smoke]
 description = "One-shot live API fetch + print, to eyeball real numbers (manual only)"
 run = "bun run scripts/smoke.ts"

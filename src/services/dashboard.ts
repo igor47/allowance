@@ -261,25 +261,38 @@ export function needsReview(entry: ClassifiedTransaction): boolean {
 }
 
 export interface FilterSummary {
+  /** Rows on screen. */
   count: number
   /** Everything in the filtered set. */
   total: number
   /** The part of it that draws down the allowance. */
   counting: number
+  /**
+   * Rows on screen that are in neither figure — transfers and ignored rows.
+   *
+   * Without this the line does not reconcile and there is nothing to say why:
+   * "21 transactions · $704 total" is summing nineteen of them, and the two it
+   * left out are visible right underneath.
+   */
+  excluded: number
 }
 
 export function summarise(entries: ClassifiedTransaction[]): FilterSummary {
   let total = 0
   let counting = 0
+  let excluded = 0
   for (const entry of entries) {
     const amount = entry.classification.amount
-    if (entry.classification.bucket === "ignored") continue
+    const { bucket } = entry.classification
     // A transfer is the same money seen twice; summing it would double it.
-    if (entry.classification.bucket === "transfer") continue
+    if (bucket === "ignored" || bucket === "transfer") {
+      excluded++
+      continue
+    }
     total += amount
     if (entry.classification.counts) counting += amount
   }
-  return { count: entries.length, total, counting }
+  return { count: entries.length, total, counting, excluded }
 }
 
 export function applyFilter(

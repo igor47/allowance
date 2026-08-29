@@ -765,6 +765,29 @@ describe("access log", () => {
  * Transfers are the same money seen twice, so they touch no total — but they
  * are reachable, which the `ignored` bucket they used to live in was not.
  */
+describe("the summary line", () => {
+  test("says how many rows are in neither figure", async () => {
+    // The two figures skip transfers — summing both legs would double the
+    // money — so without this the line does not reconcile against the rows
+    // sitting right underneath it, and nothing says why.
+    const page = await dashboard(
+      august().transfer({
+        on: "2026-08-05",
+        amount: 500,
+        from: FIDELITY_JOINT,
+        to: IGOR_PERSONAL,
+      }),
+      "?filter=all"
+    )
+    expect(page.summary).toContain("(2 not in the totals)")
+  })
+
+  test("says nothing when everything on screen is in them", async () => {
+    const page = await dashboard(august(), "?filter=spending")
+    expect(page.summary).not.toContain("not in the totals")
+  })
+})
+
 describe("transfers in the list", () => {
   const withACashout = () =>
     august().transfer({ on: "2026-08-05", amount: 500, from: IGOR_PERSONAL, to: CHASE })

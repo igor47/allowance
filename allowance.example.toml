@@ -101,6 +101,12 @@ policy = "ignore"
 #
 # All three lists are optional. Leaving them empty is legitimate: transfers
 # with both legs in the data are still matched structurally by amount and date.
+# Names must match Lunch Money exactly — including any emoji prefix, which
+# Lunch Money's own categories often carry ("🔄 Payment, Transfer"). Matching is
+# exact on purpose: a name that quietly normalised would make this file mean
+# something you cannot see. `mise run configure:lunchmoney` refuses to run when
+# a name here differs from a real category only by its prefix, and tells you
+# what to paste.
 [categories]
 
 # A payment against a card balance — the bill being settled, on either side.

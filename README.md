@@ -32,9 +32,13 @@ not lock you out of the other.
 
 Very little, but the little there is matters.
 
-**Name your accounts, then name them the same way in `allowance.toml`.** The
-whole policy keys on Lunch Money's *display name* for an account, matched
-exactly. Get one wrong and the account is treated as unknown: it will not count,
+**Names are matched exactly, in both directions.** The account policy keys on
+Lunch Money's *display name* for an account, and `[categories]` keys on its
+category names — including any emoji prefix, which Lunch Money's own categories
+often carry (`🔄 Payment, Transfer`). Nothing is normalised, because a name that
+quietly normalised would make the config mean something you cannot see;
+`mise run configure:lunchmoney` catches the near-misses and tells you what to
+paste. Get an account name wrong and it is treated as unknown: it will not count,
 and the dashboard will say so under "unknown accounts" rather than silently
 dropping the money.
 

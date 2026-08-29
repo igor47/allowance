@@ -96,6 +96,43 @@ if (wanted.length === 0) {
   process.exit(0)
 }
 
+/**
+ * A configured name that differs from a real category only by an emoji prefix.
+ *
+ * Lunch Money users prefix categories with emoji constantly — "🔄 Payment,
+ * Transfer" — and the app matches names exactly, so `"Payment, Transfer"` in
+ * the config silently matches nothing. Worse, this script would then "helpfully"
+ * create a second, duplicate category beside the real one.
+ *
+ * Matching loosely instead was the other option and is worse: it would make the
+ * config's meaning depend on a normalisation rule nobody can see. Naming the
+ * near-miss and refusing to act is the honest version.
+ */
+const bare = (s: string) => s.toLowerCase().replace(/^[^\p{L}\p{N}]+/u, "").trim()
+
+const nearMisses = [
+  ...config.categories.cardPayment,
+  ...config.categories.internalTransfer,
+  ...config.categories.suggestsTransfer,
+].flatMap((name) => {
+  if (byName.has(name.toLowerCase())) return []
+  const near = categories.find((c) => bare(c.name) === bare(name))
+  return near ? [{ configured: name, actual: near.name }] : []
+})
+
+if (nearMisses.length > 0) {
+  console.error("\nallowance.toml names categories that Lunch Money spells differently:\n")
+  for (const { configured, actual } of nearMisses) {
+    console.error(`  ${JSON.stringify(configured)}  ->  ${JSON.stringify(actual)}`)
+  }
+  console.error(
+    "\nMatching is exact, so these currently match nothing at all. Copy the names" +
+      "\non the right into allowance.toml. Refusing to continue: applying now would" +
+      "\ncreate duplicate categories beside the ones you already have.\n"
+  )
+  process.exit(1)
+}
+
 console.log(`\nreconciling Lunch Money against ${wanted.length} configured categories\n`)
 
 for (const { name, why } of wanted) {

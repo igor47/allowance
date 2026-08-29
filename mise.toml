@@ -47,7 +47,3 @@ run = "bun run scripts/smoke.ts"
 [tasks.image]
 description = "Build the container image locally, as CI does on a push"
 run = "docker build -t allowance:dev ."
-
-[tasks."migrate:verify"]
-description = "Diff v1 against v2 over the same window, live (manual only)"
-run = "bun run live/differential.ts"

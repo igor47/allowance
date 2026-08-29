@@ -45,7 +45,6 @@ tasks run locally and anywhere else (including CI, if it ever exists).
 | `mise run test` | `bun test` — offline, never touches the live API |
 | `mise run image` | build the container image locally, as CI does |
 | `mise run smoke` | one-shot live fetch + print, to eyeball real numbers (manual) |
-| `mise run migrate:verify` | diff API v1 against v2 over one window, live (manual) |
 
 Scripts that back a task live in `scripts/` and are invoked *only* through the
 task, never directly.

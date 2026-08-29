@@ -22,7 +22,7 @@ import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { Cycle } from "./cycle"
 import { addDays, type IsoDate } from "./dates"
-import { isCardPayment } from "./policy"
+import { isCardPayment, type TransferCategories } from "./policy"
 
 export interface CycleTotal {
   charges: number
@@ -38,22 +38,27 @@ const EMPTY: CycleTotal = { charges: 0, credits: 0, net: 0, count: 0 }
  * and category are not consulted — a $196 hotel deposit is on the bill whether
  * or not it got filed as a transfer — so only payments are taken out.
  */
-export function isCardCharge(txn: LmTransaction, account: string): boolean {
+export function isCardCharge(
+  txn: LmTransaction,
+  account: string,
+  categories: TransferCategories
+): boolean {
   if (accountNameOf(txn) !== account) return false
-  return !isCardPayment(txn)
+  return !isCardPayment(txn, categories)
 }
 
 export function cycleTotal(
   txns: LmTransaction[],
   start: IsoDate,
   end: IsoDate,
-  account: string
+  account: string,
+  categories: TransferCategories
 ): CycleTotal {
   const total = { ...EMPTY }
   for (const txn of txns) {
     const posted = postedDate(txn)
     if (posted < start || posted > end) continue
-    if (!isCardCharge(txn, account)) continue
+    if (!isCardCharge(txn, account, categories)) continue
     const amount = Number.parseFloat(txn.amount)
     if (amount > 0) total.charges += amount
     else total.credits += amount
@@ -127,6 +132,8 @@ export interface Reconciliation {
 export interface ReconcileOptions {
   /** The card's display name. Required: there is no default card any more. */
   account: string
+  /** Which categories mark the settling payment. */
+  categories: TransferCategories
   /**
    * The earliest date the caller asked the API for.
    *
@@ -143,9 +150,9 @@ export function reconcile(
   cycle: Cycle,
   options: ReconcileOptions
 ): Reconciliation {
-  const { account } = options
+  const { account, categories } = options
   const onCard = txns.filter((t) => accountNameOf(t) === account)
-  const billed = cycleTotal(txns, cycle.start, cycle.end, account).charges
+  const billed = cycleTotal(txns, cycle.start, cycle.end, account, categories).charges
 
   const unchecked = {
     checkable: false,
@@ -173,7 +180,7 @@ export function reconcile(
   const windowEnd = addDays(cycle.due, PAYMENT_SLACK_DAYS)
   const payments = onCard.filter((t) => {
     const posted = postedDate(t)
-    return posted > cycle.end && posted <= windowEnd && isCardPayment(t)
+    return posted > cycle.end && posted <= windowEnd && isCardPayment(t, categories)
   })
 
   // Not yet due, or not yet imported. Either way there is nothing to compare.
@@ -187,7 +194,7 @@ export function reconcile(
   const creditsAfterClose = onCard.reduce((sum, t) => {
     const posted = postedDate(t)
     if (posted <= cycle.end || posted > paidOn) return sum
-    if (isCardPayment(t)) return sum
+    if (isCardPayment(t, categories)) return sum
     const amount = Number.parseFloat(t.amount)
     return amount < 0 ? sum + amount : sum
   }, 0)

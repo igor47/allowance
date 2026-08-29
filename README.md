@@ -43,13 +43,24 @@ category; left in the budget it double-counts, because the charges it settles
 were already counted on the card. In Lunch Money: Categories → Credit card
 payment → exclude from budget and from totals.
 
-**Consider a category for internal sweeps.** A brokerage cash account keeps its
-balance in a money-market position and sweeps it in and out on every movement,
-so each real transaction arrives paired with a bookkeeping row. Both halves come
-through as "Payment, Transfer", so that category cannot separate them. A rule
-that files the sweeps into a category of their own makes them unambiguous. The
-app also catches them by payee — see `INTERNAL_TRANSFER` in
-`src/domain/policy.ts` — but a rule is more reliable than a regex.
+**Set up the rules the `[categories]` config names.** This is the one piece of
+real setup, and it is where the app deliberately leans on Lunch Money rather
+than guessing from payees. Two rules:
+
+| Match | Category | Why |
+|---|---|---|
+| payee contains `AUTOMATIC PAYMENT` (or whatever your issuer writes) | `Credit card payment` | Lunch Money files most autopays here already, but the occasional one arrives as "Income" — and read alone, that is a large refund crediting your allowance |
+| the payee your brokerage uses for core-account sweeps | `Internal sweep` (create it) | A brokerage cash account sweeps money in and out of a money-market position on every movement, so each real transaction arrives paired with a bookkeeping row. Both halves look identical to a genuine deposit; only a rule separates them |
+
+Rules have no API in either v1 or v2, so they have to be made in Lunch Money's
+own app. That is the point: they live where the data lives, they are visible,
+and you can edit them from your phone — which a regex compiled into this app
+never was.
+
+Without them nothing breaks loudly. Transfers with both legs in the data are
+still matched structurally, by equal-and-opposite amount within three days;
+what you lose is the single-legged case, which lands in review for you to tag
+by hand.
 
 **You do not need to create the tags.** `recurring`, `irregular`, `spending`,
 `transfer` and the person tags are created on first use.

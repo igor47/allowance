@@ -118,7 +118,7 @@ export class DashboardService {
   }
 
   async build(today: IsoDate): Promise<Dashboard> {
-    const { accounts, allowance } = this.config
+    const { accounts, categories, allowance } = this.config
     // A config with no card is legitimate — the allowance works without one —
     // but the summary boxes and the reconciliation line have nothing to be
     // about, so `card` is null and the components say so.
@@ -141,7 +141,7 @@ export class DashboardService {
     // `accounts` here is the config's policy; the API's are `plaidAccounts`.
     const { transactions, plaidAccounts } = await this.load(start, today)
 
-    const classified = classifyAll(transactions, accounts)
+    const classified = classifyAll(transactions, this.config)
     const inPeriod = classified
       .filter((c) => c.txn.date >= periodStart && c.txn.date <= today)
       .sort((a, b) =>
@@ -153,10 +153,23 @@ export class DashboardService {
       transactions,
       cycles.lastClosed.start,
       cycles.lastClosed.end,
-      on
+      on,
+      categories
     )
-    const currentTotal = cycleTotal(transactions, cycles.current.start, cycles.current.end, on)
-    const settledTotal = cycleTotal(transactions, cycles.settled.start, cycles.settled.end, on)
+    const currentTotal = cycleTotal(
+      transactions,
+      cycles.current.start,
+      cycles.current.end,
+      on,
+      categories
+    )
+    const settledTotal = cycleTotal(
+      transactions,
+      cycles.settled.start,
+      cycles.settled.end,
+      on,
+      categories
+    )
     const reported = balanceOf(plaidAccounts, on)
 
     return {
@@ -173,6 +186,7 @@ export class DashboardService {
           total: settledTotal,
           reconciliation: reconcile(transactions, cycles.settled, {
             account: on,
+            categories,
             windowStart: start,
           }),
         },

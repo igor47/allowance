@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { LmTransaction } from "../lunchmoney/types"
-import { CARD, CHECKING } from "../test/accounts"
+import { CARD, CHECKING, TEST_CATEGORIES } from "../test/accounts"
 import { aCharge, anAutopay, anAutopayDebit, aRefund } from "../test/world"
 import { cycleTotal as cycleTotalOn, type ReconcileOptions, reconcile as reconcileOn } from "./card"
 import type { Cycle } from "./cycle"
@@ -12,12 +12,12 @@ import type { IsoDate } from "./dates"
  * rather than being the last argument of thirty calls.
  */
 const cycleTotal = (txns: LmTransaction[], start: IsoDate, end: IsoDate) =>
-  cycleTotalOn(txns, start, end, CARD)
+  cycleTotalOn(txns, start, end, CARD, TEST_CATEGORIES)
 const reconcile = (
   txns: LmTransaction[],
   cycle: Cycle,
-  options: Omit<ReconcileOptions, "account"> = {}
-) => reconcileOn(txns, cycle, { ...options, account: CARD })
+  options: Omit<ReconcileOptions, "account" | "categories"> = {}
+) => reconcileOn(txns, cycle, { ...options, account: CARD, categories: TEST_CATEGORIES })
 
 describe("cycle totals", () => {
   test("sums charges and credits on the statement card only", () => {

@@ -323,7 +323,7 @@ describe("the statement check", () => {
     // Both halves of it: a five-figure row would be the loudest thing there.
     const page = await dashboard(withASettledStatement(1_000, 1_000))
     expect(page.rows.map((r) => r.payee)).not.toContain("AUTOMATIC PAYMENT - THANK")
-    expect(page.rows.map((r) => r.payee)).not.toContain("DIRECT DEBIT CARD CREDIT CAUTOPAY (Cash)")
+    expect(page.rows.map((r) => r.payee)).not.toContain("AUTOPAY BANK DEBIT")
   })
 
   test("stays quiet when the payment has not landed yet", async () => {

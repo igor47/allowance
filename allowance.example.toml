@@ -11,7 +11,7 @@
 
 
 # Dollars per day.
-daily_target = 200
+daily_target = 75
 
 # The date the app began counting. A floor, not a recurring anniversary: once
 # it is past, each month restarts on the 1st.
@@ -89,3 +89,37 @@ policy = "fixed"
 
 [accounts."Old Card"]
 policy = "ignore"
+
+
+# Which Lunch Money categories mean money *moved* rather than money *went*.
+#
+# This is where the app leans on Lunch Money instead of guessing. Lunch Money's
+# rules assign categories from the payee, deterministically, and you can edit
+# them from your phone — so the patterns that recognise a card payment or a
+# bank's internal bookkeeping live there, in front of you, rather than as a
+# regex in this app naming your bank.
+#
+# All three lists are optional. Leaving them empty is legitimate: transfers
+# with both legs in the data are still matched structurally by amount and date.
+[categories]
+
+# A payment against a card balance — the bill being settled, on either side.
+# Lunch Money ships "Credit card payment" and files autopays into it, so this
+# usually needs no rule of your own. It is worth adding one anyway
+# (payee contains "AUTOMATIC PAYMENT" -> "Credit card payment"), because the
+# occasional autopay arrives filed as "Income", and read alone that is a large
+# refund crediting your allowance.
+card_payment = ["Credit card payment"]
+
+# A bank's bookkeeping against itself. A brokerage cash account sweeps money in
+# and out of a money-market position on every movement, so each real
+# transaction arrives paired with a bookkeeping row that is not a spend. Both
+# halves look identical to a genuine deposit, so only a rule separates them:
+# make a category and point a rule at the payee your bank uses.
+internal_transfer = ["Internal sweep"]
+
+# Categories that merely *suggest* a movement. These can never drop a row on
+# their own — Lunch Money files about one real charge a month under
+# "Payment, Transfer", and a rule that ignored those would quietly swallow
+# money. They only corroborate a pair already matched by amount and date.
+suggests_transfer = ["Payment, Transfer"]

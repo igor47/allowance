@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import type { LmTransaction } from "../lunchmoney/types"
-import { CARD, CHECKING, OLD_CARD, SAVINGS, TEST_ACCOUNTS, WALLET } from "../test/accounts"
+import {
+  CARD,
+  CHECKING,
+  OLD_CARD,
+  SAVINGS,
+  TEST_ACCOUNTS,
+  TEST_CATEGORIES,
+  TEST_POLICY,
+  WALLET,
+} from "../test/accounts"
 import { tag, txn } from "../test/factories"
 import {
   aCharge,
@@ -25,7 +34,7 @@ import {
  * bound once here rather than being the third argument of forty calls.
  */
 const classify = (txn: LmTransaction, transfers?: TransferIndex) =>
-  classifyWith(txn, TEST_ACCOUNTS, transfers)
+  classifyWith(txn, TEST_POLICY, transfers)
 const unknownAccounts = (txns: LmTransaction[]) => unknownAccountsIn(txns, TEST_ACCOUNTS)
 
 describe("account policy", () => {
@@ -127,10 +136,39 @@ describe("negative amounts", () => {
   })
 
   test("a card autopay never credits the allowance", () => {
-    // Lunch Money files some autopays as Income with the exclude flag unset, so
-    // the flag alone is not enough to catch these.
-    const payment = anAutopay({ on: "2026-07-09", amount: 9000, category: "Income" })
-    expect(classify(payment).counts).toBe(false)
+    expect(classify(anAutopay({ on: "2026-07-09", amount: 9000 })).counts).toBe(false)
+  })
+
+  /**
+   * What changed when the payee regexes became categories, stated as a test
+   * rather than left to be discovered.
+   *
+   * A regex on the payee caught "AUTOMATIC PAYMENT" whatever Lunch Money had
+   * called the row. Categories cannot: Lunch Money does file the occasional
+   * autopay under "Income" with the exclude flag unset, and read alone that is
+   * a five-figure refund crediting the allowance.
+   *
+   * It is caught anyway, because the far leg is a row on a tracked bank
+   * account that Lunch Money files under "Credit card payment" — so the pair
+   * matches structurally and both halves drop out. That is the normal case:
+   * an autopay debits an account you track, or it would not be an autopay.
+   *
+   * The exposure is a leg whose partner is outside the fetched window, and the
+   * answer to it is a Lunch Money rule mapping the payee to the category. That
+   * rule is documented in the README, and it is a thing a person can see and
+   * edit, which the regex never was.
+   */
+  test("a miscategorised autopay is still caught, by its partner", () => {
+    const miscategorised = anAutopay({ on: "2026-08-09", amount: 9000, category: "Income" })
+    const debit = anAutopayDebit({ on: "2026-08-09", amount: 9000 })
+
+    const [card, bank] = verdictsFor([miscategorised, debit])
+    expect(card?.counts).toBe(false)
+    expect(card?.bucket).toBe("transfer")
+    expect(bank?.counts).toBe(false)
+
+    // And alone — the case the Lunch Money rule exists to prevent.
+    expect(classify(miscategorised).counts).toBe(true)
   })
 
   test("deposits into a fixed-cost account never count", () => {
@@ -282,7 +320,8 @@ describe("the wallet", () => {
   })
 
   test("funding the wallet from the bank is a question, not an answer", () => {
-    // `^venmo$` used to ignore these outright. It could not tell a tracked
+    // A rule on the wallet app's bare name used to ignore these outright.
+    // It could not tell a tracked
     // wallet (the spend lands there) from an untracked one (so this
     // row is the only record) — same payee, same category, opposite meaning.
     // Only a human knows, so it goes to review instead of being swallowed.
@@ -291,7 +330,7 @@ describe("the wallet", () => {
         on: "2026-08-02",
         amount: 150,
         account: SAVINGS,
-        payee: "Venmo",
+        payee: "A Wallet App",
         category: "Payment, Transfer",
       })
     )
@@ -324,7 +363,7 @@ describe("the wallet", () => {
  * question about the set rather than about one row's payee.
  */
 const verdictsFor = (txns: LmTransaction[]) => {
-  const transfers = findTransfers(txns)
+  const transfers = findTransfers(txns, TEST_CATEGORIES)
   return txns.map((t) => classify(t, transfers))
 }
 
@@ -361,7 +400,7 @@ describe("transfers between accounts we own", () => {
   })
 
   test("a transfer that charges a fee does not match, and is wrong small", () => {
-    // Venmo's instant option takes about 1.75%, so the amounts disagree. The
+    // An instant cashout takes a percent or two, so the amounts disagree. The
     // wallet leg falls through and counts — visibly, in the review queue.
     const legs = aWalletCashout({ on: "2026-08-20", amount: 400 })
     const shaved = [legs[0], { ...legs[1], amount: "-393.00" }]
@@ -382,7 +421,7 @@ describe("transfers between accounts we own", () => {
       aDeposit({ on: "2026-08-11", amount: 400, into: CHECKING, ...transfer }),
       aDeposit({ on: "2026-08-11", amount: 400, into: SAVINGS, ...transfer }),
     ]
-    expect(findTransfers(legs).size).toBe(0)
+    expect(findTransfers(legs, TEST_CATEGORIES).size).toBe(0)
     const [wallet] = verdicts(legs)
     expect(wallet?.counts).toBe(true)
   })
@@ -406,13 +445,13 @@ describe("transfers between accounts we own", () => {
       }),
       aDeposit({ on: "2026-08-11", amount: 400, into: CHECKING, ...transfer }),
     ]
-    expect(findTransfers(legs).size).toBe(0)
+    expect(findTransfers(legs, TEST_CATEGORIES).size).toBe(0)
   })
 
   test("matching does not depend on the order the transactions arrive in", () => {
     const legs = aTransfer({ on: "2026-08-10", amount: 2000, from: CHECKING, to: WALLET })
-    expect(findTransfers(legs).size).toBe(2)
-    expect(findTransfers([...legs].reverse()).size).toBe(2)
+    expect(findTransfers(legs, TEST_CATEGORIES).size).toBe(2)
+    expect(findTransfers([...legs].reverse(), TEST_CATEGORIES).size).toBe(2)
   })
 
   test("a leg that lands outside the window is not matched", () => {
@@ -423,7 +462,7 @@ describe("transfers between accounts we own", () => {
       to: SAVINGS,
       settles: 4,
     })
-    expect(findTransfers(legs).size).toBe(0)
+    expect(findTransfers(legs, TEST_CATEGORIES).size).toBe(0)
   })
 
   test("opposite rows within one account are not a transfer", () => {
@@ -435,7 +474,7 @@ describe("transfers between accounts we own", () => {
       from: CHECKING,
       to: CHECKING,
     })
-    expect(findTransfers(rows).size).toBe(0)
+    expect(findTransfers(rows, TEST_CATEGORIES).size).toBe(0)
     const [out] = verdicts(rows)
     expect(out?.bucket).toBe("unclassified")
   })
@@ -448,7 +487,7 @@ describe("transfers between accounts we own", () => {
       aCharge({ on: "2026-08-08", amount: 300, payee: "A Restaurant" }),
       aDeposit({ on: "2026-08-11", amount: 300, payee: "CHECK RECEIVED", into: CHECKING }),
     ]
-    expect(findTransfers(rows).size).toBe(0)
+    expect(findTransfers(rows, TEST_CATEGORIES).size).toBe(0)
     const [dinner, cheque] = verdicts(rows)
     expect(dinner?.counts).toBe(true)
     expect(cheque?.bucket).toBe("deposit")
@@ -476,7 +515,7 @@ describe("transfers between accounts we own", () => {
       anAutopay({ on: "2026-08-09", amount: 9000 }),
       anAutopayDebit({ on: "2026-08-09", amount: 9000, from: CHECKING }),
     ]
-    expect(findTransfers(legs).size).toBe(2)
+    expect(findTransfers(legs, TEST_CATEGORIES).size).toBe(2)
     for (const verdict of verdicts(legs)) expect(verdict.counts).toBe(false)
   })
 })
@@ -494,7 +533,7 @@ describe("saying so by hand", () => {
         on: "2026-08-02",
         amount: 1072,
         account: CHECKING,
-        payee: "Venmo",
+        payee: "A Wallet App",
         category: "Payment, Transfer",
         tags: ["transfer"],
       })

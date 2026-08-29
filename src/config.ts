@@ -15,7 +15,13 @@
  */
 
 import { readFileSync } from "node:fs"
-import type { AccountConfig, AccountPolicy, Accounts, StatementConfig } from "./domain/policy"
+import type {
+  AccountConfig,
+  AccountPolicy,
+  Accounts,
+  StatementConfig,
+  TransferCategories,
+} from "./domain/policy"
 
 export interface AllowanceConfig {
   /** Start of the budgeting period. Declared, not derived. */
@@ -63,6 +69,11 @@ export interface Config {
   historyStart: string
   accounts: Accounts
   people: Person[]
+  /**
+   * Which Lunch Money categories mean a movement rather than a spend. Together
+   * with `accounts`, this is what makes `Config` satisfy the domain's `Policy`.
+   */
+  categories: TransferCategories
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +201,31 @@ function peopleOf(source: string, raw: unknown): Person[] {
   return people
 }
 
+function names(source: string, raw: unknown, key: string): string[] {
+  // Absent is legitimate and common: a household with no brokerage needs no
+  // internal-sweep category, and the app simply never classifies one.
+  if (raw === undefined) return []
+  if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string" || v === "")) {
+    throw new ConfigError(source, `categories.${key} must be a list of category names`)
+  }
+  return raw as string[]
+}
+
+function categoriesOf(source: string, raw: unknown): TransferCategories {
+  // No [categories] at all means nothing is ever recognised as a movement by
+  // category. Legitimate — matched pairs still work — but it is worth being an
+  // explicit empty shape rather than a special case downstream.
+  if (raw === undefined) {
+    return { cardPayment: [], internalTransfer: [], suggestsTransfer: [] }
+  }
+  if (!isTable(raw)) throw new ConfigError(source, "[categories] is not a table")
+  return {
+    cardPayment: names(source, raw.card_payment, "card_payment"),
+    internalTransfer: names(source, raw.internal_transfer, "internal_transfer"),
+    suggestsTransfer: names(source, raw.suggests_transfer, "suggests_transfer"),
+  }
+}
+
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -215,6 +251,7 @@ export function parseConfig(raw: unknown, source: string): Omit<Config, keyof En
     historyStart,
     accounts: accountsOf(source, raw.accounts),
     people: peopleOf(source, raw.people),
+    categories: categoriesOf(source, raw.categories),
   }
 }
 

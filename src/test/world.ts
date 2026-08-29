@@ -15,7 +15,14 @@
 import type { Config } from "../config"
 import { addDays, type IsoDate } from "../domain/dates"
 import type { LmPlaidAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
-import { CARD, CHECKING, TEST_ACCOUNTS, type TestAccount, WALLET } from "./accounts"
+import {
+  CARD,
+  CHECKING,
+  TEST_ACCOUNTS,
+  TEST_CATEGORIES,
+  type TestAccount,
+  WALLET,
+} from "./accounts"
 import { account, metadata, recurringItem, type TxnOverrides, txn } from "./factories"
 
 export interface World {
@@ -43,6 +50,7 @@ export const TEST_CONFIG: Config = {
   allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
   historyStart: "2025-01",
   accounts: TEST_ACCOUNTS,
+  categories: TEST_CATEGORIES,
   people: [
     { tag: "alex", label: "Alex", short: "A" },
     { tag: "sam", label: "Sam", short: "S" },
@@ -389,7 +397,7 @@ export function anAutopay(options: AutopayOptions): LmTransaction {
     amount: money(-options.amount),
     payee: "AUTOMATIC PAYMENT - THANK",
     original_name: "AUTOMATIC PAYMENT - THANK YOU",
-    category_name: options.category ?? "Payment, Transfer",
+    category_name: options.category ?? "Credit card payment",
     is_income: options.category === "Income",
     ...accountFields(CARD),
     plaid_metadata: options.posted
@@ -408,8 +416,8 @@ export function anAutopayDebit(options: AutopayOptions): LmTransaction {
   return txn({
     date: options.debitedOn ?? addDays(options.on, 1),
     amount: money(options.amount),
-    payee: "DIRECT DEBIT CARD CREDIT CAUTOPAY (Cash)",
-    original_name: "DIRECT DEBIT CARD CREDIT CAUTOPAY",
+    payee: "AUTOPAY BANK DEBIT",
+    original_name: "AUTOPAY BANK DEBIT",
     category_name: "Credit card payment",
     ...accountFields(options.from ?? CHECKING),
   })
@@ -424,11 +432,8 @@ export function aSweep(options: SweepOptions): LmTransaction {
   return txn({
     date: options.on,
     amount: money(options.amount),
-    payee:
-      options.amount > 0
-        ? "PURCHASE INTO CORE ACCOUNT FDIC INSURED DEPOSIT"
-        : "REDEMPTION FROM CORE ACCOUNT FDIC INSURED DEPOSIT",
-    category_name: "Payment, Transfer",
+    payee: options.amount > 0 ? "PURCHASE INTO CORE ACCOUNT" : "REDEMPTION FROM CORE ACCOUNT",
+    category_name: "Internal sweep",
     exclude_from_totals: true,
     ...accountFields(options.account ?? CHECKING),
   })
@@ -469,17 +474,19 @@ export function aTransfer(options: TransferOptions): [LmTransaction, LmTransacti
 }
 
 /**
- * The bank side of topping the wallet up, or emptying it back: a payee of
- * exactly "Venmo", no name, no memo, which is the entire basis of the rule that
- * catches it. A top-up appears here and nowhere else, which is why it is still
- * the payee rather than a matching leg that has to catch it. A cashout also
- * posts a wallet row — see `aWalletCashout()`.
+ * The bank side of topping the wallet up, or emptying it back.
+ *
+ * The payee is the bare name of the wallet app — no person, no memo — which is
+ * what makes it indistinguishable from paying someone *through* that app. No
+ * rule keys on it, and none should: what resolves this row is whether a
+ * matching leg exists on a wallet the household actually tracks. A cashout
+ * also posts a wallet row — see `aWalletCashout()`.
  */
 export function aWalletTransfer(options: SweepOptions): LmTransaction {
   return txn({
     date: options.on,
     amount: money(options.amount),
-    payee: "Venmo",
+    payee: "A Wallet App",
     original_name: "WALLET",
     category_name: "Payment, Transfer",
     ...accountFields(options.account ?? CHECKING),
@@ -504,7 +511,7 @@ export function aWalletCashout(options: CashoutOptions): [LmTransaction, LmTrans
       category_name: "Payment, Transfer",
       exclude_from_totals: true,
       ...accountFields(WALLET),
-      institution_name: "Venmo - Personal",
+      institution_name: "A Wallet App",
     }),
     aWalletTransfer({
       on: addDays(options.on, options.settles ?? 1),
@@ -524,7 +531,7 @@ export function aWalletPayment(options: WalletPaymentOptions): LmTransaction {
     category_name: options.category ?? "Payment, Transfer",
     exclude_from_totals: options.excluded ?? true,
     ...accountFields(WALLET),
-    institution_name: "Venmo - Personal",
+    institution_name: "A Wallet App",
     tags: options.tags ?? [],
   })
 }

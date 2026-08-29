@@ -80,6 +80,17 @@ export interface AccountConfig {
 export type Accounts = Readonly<Record<string, AccountConfig>>
 
 /**
+ * Everything the classifier needs to know that is not the transaction.
+ *
+ * `Config` satisfies this structurally, so a caller that has the config passes
+ * it straight through and a test can build the two fields on their own.
+ */
+export interface Policy {
+  accounts: Accounts
+  categories: TransferCategories
+}
+
+/**
  * Accounts we have never seen are treated as fixed rather than discretionary.
  * A newly linked account should not silently add five figures to the month;
  * `unknownAccounts()` surfaces them so the omission is visible instead.
@@ -173,41 +184,60 @@ const TRANSFER = (reason: string, amount: number, reviewed = false): Classificat
 })
 
 /**
- * Bookkeeping rows a bank generates against itself.
+ * Which Lunch Money categories mean a movement rather than a spend.
  *
- * A brokerage cash account keeps its balance in a money-market position and
- * sweeps it in and out on every movement, so each real transaction arrives
- * paired with an internal sweep. Both halves come through categorised
- * "Payment, Transfer" and flagged `exclude_from_totals`, which makes those two
- * signals useless for telling a genuine deposit from bookkeeping — a work
- * reimbursement arriving as "DIRECT DEPOSIT <employer> ..." is
- * indistinguishable from its own sweep by category alone.
+ * This used to be two regexes over the payee, listing the exact strings one
+ * household's bank writes — `cautopay`, `redemption from core`, `acctverify`.
+ * They worked, and they were unshippable: they named the institutions, they
+ * were invisible to the person who would need to change them, and a household
+ * whose bank spells its sweeps differently got silence rather than an error.
  *
- * The payee is what separates them. These patterns are the internal half, and
- * they are the one place in this file that names particular institutions: they
- * were read off a real feed, and a household whose bank spells its sweeps
- * differently will need to add to them.
+ * The categories are better on every count. Lunch Money's own rules assign
+ * them — deterministically, from the payee, where the data lives and where a
+ * phone can edit them — and a rule is a thing you can look at. It is also the
+ * division of labour the rest of this app already assumes: Lunch Money is the
+ * store, and classification it can do belongs there.
+ *
+ * Three lists, because the three have different authority. See
+ * `looksLikeTransfer()` for why the last one may never act alone.
  */
-const INTERNAL_TRANSFER = /redemption from core|purchase into core|transferred from vs|acctverify/i
+export interface TransferCategories {
+  /**
+   * A payment against a card balance — the bill being settled, on either side.
+   * Lunch Money ships "Credit card payment" and Plaid files autopays into it,
+   * so this one generally needs no rule.
+   *
+   * Deliberately not `is_income` or an "Income" category: Lunch Money files
+   * genuine merchant refunds that way too, and treating those as settlements
+   * silently swallowed money that should have come back.
+   */
+  cardPayment: string[]
+  /**
+   * A bank's bookkeeping against itself. A brokerage cash account keeps its
+   * balance in a money-market position and sweeps it in and out on every
+   * movement, so each real transaction arrives paired with an internal row.
+   * Both halves come through with the same generic category and the same
+   * exclude flag as a genuine deposit, so only a rule can separate them.
+   */
+  internalTransfer: string[]
+  /**
+   * Categories that merely *suggest* a movement, and can never drop a row on
+   * their own — Lunch Money files about one real charge a month under
+   * "Payment, Transfer". Corroboration for a structural match, nothing more.
+   */
+  suggestsTransfer: string[]
+}
 
-/**
- * Card payments: the bill being settled, on either side of the transaction.
- *
- * Deliberately NOT keyed on `is_income` or an "Income" category. Lunch Money
- * files genuine merchant refunds that way too — a real theatre credit arrived
- * as category "Income" — and treating those as settlements silently swallowed
- * money that should have come back. A refund is never called
- * "AUTOMATIC PAYMENT".
- */
-const CARD_PAYMENT = /automatic payment|credit card payment|crcardpmt|cautopay|chase credit/i
+const inCategory = (txn: LmTransaction, names: string[]): boolean =>
+  !!txn.category_name && names.some((n) => n.toLowerCase() === txn.category_name?.toLowerCase())
 
-export function isInternalTransfer(txn: LmTransaction): boolean {
-  return INTERNAL_TRANSFER.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
+export function isInternalTransfer(txn: LmTransaction, categories: TransferCategories): boolean {
+  return inCategory(txn, categories.internalTransfer)
 }
 
 /** A payment against the card balance, as opposed to anything bought with it. */
-export function isCardPayment(txn: LmTransaction): boolean {
-  return CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`)
+export function isCardPayment(txn: LmTransaction, categories: TransferCategories): boolean {
+  return inCategory(txn, categories.cardPayment)
 }
 
 /**
@@ -222,9 +252,12 @@ export function isCardPayment(txn: LmTransaction): boolean {
  * $300 cheque three days later are equal, opposite and in different accounts,
  * and are not a transfer.
  */
-export function looksLikeTransfer(txn: LmTransaction): boolean {
-  if (isCardPayment(txn) || isInternalTransfer(txn)) return true
-  return !!txn.category_name && /payment|transfer/i.test(txn.category_name)
+export function looksLikeTransfer(txn: LmTransaction, categories: TransferCategories): boolean {
+  return (
+    isCardPayment(txn, categories) ||
+    isInternalTransfer(txn, categories) ||
+    inCategory(txn, categories.suggestsTransfer)
+  )
 }
 
 /**
@@ -238,9 +271,17 @@ export function looksLikeTransfer(txn: LmTransaction): boolean {
  * subsumes the card autopay, the wallet cashout and a plain bank-to-bank move
  * under one rule that names nothing.
  *
- * It cannot replace the payee rules, and is not meant to. Money sent somewhere
- * Lunch Money does not track reports one leg and has nothing to match against,
- * which is why every top-up *into* the wallet is still caught by payee alone.
+ * What it cannot do is see one leg. Money sent somewhere Lunch Money does not
+ * track reports a single row with nothing to match against, and that row goes
+ * to review rather than being guessed at.
+ *
+ * A top-up into a tracked wallet is the case worth naming, because a comment
+ * here claimed for a long time that it was "caught by payee alone". It was
+ * not: the payee is the bare name of the wallet app, which matched none of the
+ * payee rules that existed then either. What actually catches it is this
+ * function — the wallet's own credit is the far leg — with the bank row's
+ * category corroborating. When the wallet is *not* in Lunch Money there is no
+ * far leg, and that is exactly the ambiguity a human has to resolve.
  */
 
 /** How long a transfer may take to appear on the far side. */
@@ -282,7 +323,10 @@ const gap = (a: string, b: string): number => daysBetween(a < b ? a : b, a < b ?
  * of "Payment, Transfer" *on a row that also has an equal and opposite partner
  * in another account* is a very different claim from the same category alone.
  */
-export function findTransfers(txns: LmTransaction[]): TransferIndex {
+export function findTransfers(
+  txns: LmTransaction[],
+  categories: TransferCategories
+): TransferIndex {
   const leaving = txns.filter((t) => centsOf(t) > 0)
   const arriving = txns.filter((t) => centsOf(t) < 0)
 
@@ -295,7 +339,7 @@ export function findTransfers(txns: LmTransaction[]): TransferIndex {
         centsOf(into) === -centsOf(out) &&
         accountNameOf(into) !== accountNameOf(out) &&
         gap(out.date, into.date) <= TRANSFER_WINDOW_DAYS &&
-        (looksLikeTransfer(out) || looksLikeTransfer(into))
+        (looksLikeTransfer(out, categories) || looksLikeTransfer(into, categories))
     )
     candidatesFor.set(out.id, matches)
     for (const into of matches) suitorsOf.set(into.id, [...(suitorsOf.get(into.id) ?? []), out])
@@ -324,7 +368,7 @@ export function tagNames(txn: LmTransaction): string[] {
  */
 export function classify(
   txn: LmTransaction,
-  accounts: Accounts,
+  { accounts, categories }: Policy,
   transfers?: TransferIndex
 ): Classification {
   const amount = Number.parseFloat(txn.amount)
@@ -382,14 +426,13 @@ export function classify(
     }
 
   // Below here everything is a guess about a payee, so an explicit tag wins.
-  if (isInternalTransfer(txn)) return TRANSFER("internal account sweep", amount)
+  if (isInternalTransfer(txn, categories)) return TRANSFER("internal account sweep", amount)
 
   if (policy === "fixed") {
     // `exclude_from_totals` is not consulted here: a sweeping account's double
     // entry sets it on real deposits as well as on the sweeps, so it hides the
     // very transactions a reimbursement needs.
-    if (CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`))
-      return TRANSFER("credit card payment", amount)
+    if (isCardPayment(txn, categories)) return TRANSFER("credit card payment", amount)
     if (amount < 0)
       return {
         bucket: "deposit",
@@ -421,7 +464,7 @@ export function classify(
   // so in the reason errs towards overstating spend, which is the direction
   // this file errs everywhere else. Only the payee marks a payment.
   if (amount < 0) {
-    if (isCardPayment(txn)) return TRANSFER("payment against the card balance", amount)
+    if (isCardPayment(txn, categories)) return TRANSFER("payment against the card balance", amount)
     return {
       bucket: "spending",
       counts: true,

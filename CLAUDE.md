@@ -221,6 +221,33 @@ wallet that is not in Lunch Money is a spend, because the bank row is the only
 record there will ever be. Identical payee, identical category, opposite
 meaning. They go to review, and a human says which.
 
+### Payees are Lunch Money's problem, categories are ours
+
+`policy.ts` used to carry two regexes over the payee — the exact strings one
+household's bank writes for a card autopay and for a core-account sweep. They
+worked and they were unshippable: they named the institutions, they were
+invisible to the person who would need to change them, and a household whose
+bank spells its sweeps differently got silence rather than an error.
+
+They are now three lists of **Lunch Money category names**, in `[categories]`.
+Lunch Money's own rules assign the categories from the payee, which puts the
+pattern where the data is and where a phone can edit it. The three lists differ
+in authority, and the difference is the whole design:
+
+- `card_payment` and `internal_transfer` may drop a row on their own.
+- `suggests_transfer` may **never** drop a row on its own. Lunch Money files
+  about one real charge a month under "Payment, Transfer"; it only corroborates
+  a pair already matched by amount and date.
+
+The trade-off is real and is worth knowing before you change it. A regex on the
+payee caught an autopay whatever Lunch Money called it; a category cannot, and
+Lunch Money does occasionally file one as "Income" — which read alone is a
+five-figure refund crediting the allowance. It is caught anyway, because the far
+leg is on a tracked bank account filed under "Credit card payment", so the pair
+matches structurally. Only a leg whose partner falls outside the fetched window
+is exposed, and the answer to that is the rule, not a cleverer pattern. There is
+a test named for exactly this.
+
 Structural verdicts — untracked account, zero amount, matched pair — sit *above*
 the tag block and beat it, because they are facts rather than readings. The
 exception is `spending`, the only tag that can put money back into the count and

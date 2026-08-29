@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import type { AllowanceConfig } from "../config"
-import { CHECKING, TEST_ACCOUNTS } from "../test/accounts"
+import { CHECKING, TEST_POLICY } from "../test/accounts"
 import { aCharge, aRefund, TEST_CONFIG } from "../test/world"
 import { classifyAll as classifyIn, computeAllowance } from "./allowance"
 
 const CONFIG: AllowanceConfig = TEST_CONFIG.allowance
 
-const classifyAll = (txns: Parameters<typeof classifyIn>[0]) => classifyIn(txns, TEST_ACCOUNTS)
+const classifyAll = (txns: Parameters<typeof classifyIn>[0]) => classifyIn(txns, TEST_POLICY)
 const compute = (txns: Parameters<typeof classifyIn>[0], today: string) =>
   computeAllowance(classifyAll(txns), CONFIG, today)
 

@@ -210,19 +210,25 @@ export const TransactionList = ({
           being a joined group and become chips — see `.filter-bar`. */}
       <div class="btn-group btn-group-sm flex-wrap filter-bar">
         {FILTERS.map((f) => (
-          <a
-            class={`btn ${f === filter ? "btn-secondary" : "btn-outline-secondary"}`}
-            href={`/?filter=${f}${month ? `&month=${month}` : ""}`}
-            hx-get={`/transactions?filter=${f}${month ? `&month=${month}` : ""}`}
-            hx-target="#txn-list"
-            hx-swap="outerHTML"
-            hx-push-url={`/?filter=${f}${month ? `&month=${month}` : ""}`}
-          >
-            {FILTER_LABEL[f]}
-            {f === "review" && needsReview > 0 ? (
-              <span class="badge text-bg-warning ms-1">{needsReview}</span>
-            ) : null}
-          </a>
+          <>
+            {/* Below sm the bar folds here rather than wherever the remainder
+                allowed: three views to triage in, four ways to cut the month.
+                Without it "All" changed rows twice between 390px and 500. */}
+            {f === "all" ? <span class="filter-break" aria-hidden="true" /> : null}
+            <a
+              class={`btn ${f === filter ? "btn-secondary" : "btn-outline-secondary"}`}
+              href={`/?filter=${f}${month ? `&month=${month}` : ""}`}
+              hx-get={`/transactions?filter=${f}${month ? `&month=${month}` : ""}`}
+              hx-target="#txn-list"
+              hx-swap="outerHTML"
+              hx-push-url={`/?filter=${f}${month ? `&month=${month}` : ""}`}
+            >
+              {FILTER_LABEL[f]}
+              {f === "review" && needsReview > 0 ? (
+                <span class="badge text-bg-warning ms-1">{needsReview}</span>
+              ) : null}
+            </a>
+          </>
         ))}
       </div>
     </div>

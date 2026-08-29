@@ -203,14 +203,68 @@
 }
 
 /*
- * On a phone the transaction row goes vertical.
+ * ─── How this page reflows ────────────────────────────────────────────────
  *
- * Five columns need about 700px between them, so at 390px the amount, the
- * bucket badge and every tag button sat off the right edge inside the
- * horizontal scroller. The list was readable and completely untaggable, which
- * is most of what the list is for.
+ * Every number here was measured in a browser rather than picked off
+ * Bootstrap's list. A breakpoint chosen by feel is one that lies the moment
+ * the content changes, which is exactly what had happened.
  *
- * The markup does not change: the `tr` becomes a three-row grid and the cells
+ * Three of the four switch at sm (576px), because that is where each stops
+ * fitting:
+ *
+ *   navbar         brand + two links + username + month + clock ≈ 500px
+ *   filter chips   the seven at their natural width are 522px
+ *   budget table   min-content 409px — its columns are all short words
+ *
+ * The transaction table is the exception, and switches at 880px. Its four
+ * fixed columns come to 32rem, and the description column stops identifying
+ * anything much under 300px: 512 + 300 + 24 of container padding is 836, so
+ * 880 clears it with slack. Below that the row stacks.
+ *
+ * That table used to switch at sm, which was wrong by 450px. Its intrinsic
+ * width is 983px, so from 576 all the way to about 1020 it overflowed its own
+ * scroll box and the tag buttons sat off the right edge — the exact failure
+ * the phone layout was built to fix, one breakpoint further along.
+ *
+ * The 983 came from the description column. Its meta lines are `nowrap`, which
+ * gave the cell a min-content width of 506px, and an auto-layout table grows
+ * to fit its content rather than making the content fit — so the
+ * `text-overflow: ellipsis` on those lines could never once have fired.
+ * `table-layout: fixed` inverts that. It is what makes the column elastic, the
+ * ellipsis real, and the breakpoint above true rather than aspirational.
+ */
+
+/*
+ * Wide enough for the transaction table. Each fixed width is that column's
+ * content plus a little: the six buttons measure 208px, "unclassified" is the
+ * widest badge, and the description gets whatever is left over.
+ */
+@media (min-width: 880px) {
+  .txn-table {
+    table-layout: fixed;
+  }
+
+  .txn-table td:nth-child(1) {
+    width: 4.5rem;
+  }
+
+  .txn-table td:nth-child(3) {
+    width: 6.5rem;
+  }
+
+  .txn-table td:nth-child(4) {
+    width: 6.5rem;
+  }
+
+  .txn-table td:nth-child(5) {
+    width: 14.5rem;
+  }
+}
+
+/*
+ * Too narrow for the table: the row goes vertical.
+ *
+ * The markup does not change. The `tr` becomes a three-row grid and the cells
  * are placed into it by position, so every selector in `src/test/page.ts`
  * still finds the same element.
  *
@@ -221,11 +275,11 @@
  *   [Card] untagged on Card
  *   [ spend ][ recur ][ irreg ][ xfer ]  [ I ][ S ]
  *
- * The bucket rides on the header line with the date because it is metadata of
- * the same kind, which leaves the whole width to the buttons — and the whole
- * width is what makes them a 36px tap target instead of a 20px one.
+ * The bucket rides on the header line with the date, being metadata of the
+ * same kind, which leaves the whole width to the buttons — and the whole width
+ * is what makes them a 36px tap target rather than a 20px one.
  */
-@media (max-width: 575.98px) {
+@media (max-width: 879.98px) {
   .txn-table tr {
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -262,27 +316,57 @@
     margin-top: 0.15rem;
   }
 
+  /*
+   * Capped, because this regime runs to 767px and six buttons spread across
+   * that much would be a row of enormous targets for a list you scan. Past
+   * the cap it stays put at the right, under the amount it belongs to.
+   */
   .txn-table td:nth-child(5) {
     grid-area: 3 / 1 / 4 / 4;
     display: flex;
-    gap: 0.4rem;
-    margin-top: 0.4rem;
+    /* For the "not taggable" note, which has no group to grow in its place. */
+    justify-content: flex-end;
+    gap: 0.65rem;
+    margin-top: 0.45rem;
+    /*
+     * `width` and `justify-self`, not `margin-left: auto`. An auto inline
+     * margin makes a grid item shrink to fit, which cancels the stretch the
+     * buttons below need free space from — with it the six sized themselves
+     * from their labels and stayed unequal, which is the bug this was
+     * supposed to fix.
+     */
+    width: 100%;
+    max-width: 26rem;
+    justify-self: end;
     /* Set for the desktop column; here the groups may break at 320px. */
     white-space: normal;
   }
 
   /*
-   * Both groups share the free space, so a thumb has something to hit. The
-   * desktop size is set for a mouse and is half the 44px a finger wants.
+   * All six the same width, always.
+   *
+   * `flex: 1 1 auto` split the free space evenly between a group of four and a
+   * group of two, so I and S grew twice as fast as their neighbours as the
+   * window widened — narrow at 320px, wider than "spend" by 430px. Weighting
+   * each group by how many buttons it holds, over a zero basis, makes every
+   * button one sixth of the row at every width in the regime.
    */
   .txn-table td:nth-child(5) .tag-group {
-    flex: 1 1 auto;
+    flex: 4 1 0;
+    /* The gap between the two is the flex gap alone, not gap plus a margin. */
+    margin-right: 0 !important;
   }
 
-  .txn-table .tag-btn {
+  .txn-table td:nth-child(5) .tag-group + .tag-group {
+    flex: 2 1 0;
+  }
+
+  .txn-table .tag-group > .tag-btn {
+    flex: 1 1 0;
+    min-width: 0;
     --bs-btn-padding-y: 0.4rem;
-    --bs-btn-padding-x: 0.5rem;
-    --bs-btn-font-size: 0.85rem;
+    --bs-btn-padding-x: 0.3rem;
+    --bs-btn-font-size: 0.8rem;
   }
 
   /* One line, not two: there is room beside the date for where it posted. */
@@ -302,24 +386,46 @@
   .txn-posted:empty {
     display: none;
   }
+}
 
-  /*
-   * Seven filters do not fit on one 390px line, and a button group only knows
-   * how to square the edges of a single row: wrapped, the joins land in the
-   * middle of a row and the last row stretches three buttons to the width of
-   * the first row's four. Below sm they stop pretending to be one control and
-   * become what they already read as — chips, at their own width.
-   *
-   * `!important` because Bootstrap sets the joins from selectors four classes
-   * deep (`.btn-group > :not(.btn-check:first-child) + .btn`), which nothing
-   * short of restating them can outweigh.
-   */
+/*
+ * Below sm the seven filters do not fit on one line, so they take two — the
+ * same two at every width, rather than whichever the remainder happened to
+ * allow.
+ *
+ * Left to wrap on its own the bar reshuffled continuously as the window moved:
+ * "All" sat at the end of the first row at 390px, at the start of the second
+ * at 430, and back again at 500. `.filter-break` puts the fold in one place,
+ * after "Deposits" — three views to triage in, four ways to cut the month —
+ * and both rows then stretch to the full width, so the fold reads as a
+ * decision rather than as whatever was left over.
+ *
+ * A button group only knows how to square the edges of a single row, so its
+ * joins would land mid-row here; below sm they come off and the seven become
+ * what they already read as, chips.
+ */
+.filter-break {
+  display: none;
+}
+
+@media (max-width: 575.98px) {
+  .filter-break {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+  }
+
   .filter-bar {
     gap: 0.35rem;
   }
 
+  /*
+   * `!important` because Bootstrap sets the joins from selectors four classes
+   * deep (`.btn-group > :not(.btn-check:first-child) + .btn`), which nothing
+   * short of restating them can outweigh.
+   */
   .filter-bar > .btn {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     margin-left: 0 !important;
     border-radius: var(--bs-border-radius-sm) !important;
     /* Only the height: growing the sides too would cost a third row. */
@@ -330,11 +436,11 @@
 /*
  * The budget tables stack too, and label themselves as they go.
  *
- * Six columns at 390px put "State" off the right edge of its own scroll box,
- * so the one column saying an expected bill never arrived was the one you
- * could not see. Stacking the row solves that but throws away the header,
- * which is where five of the six figures got their meaning — hence the
- * `data-label` on each cell, which the row draws for itself:
+ * Six columns put "State" off the right edge of its own scroll box, so the one
+ * column that says an expected bill never arrived was the one you could not
+ * see. Stacking the row fixes the reach but throws away the header, which is
+ * where five of the six figures got their meaning — hence the `data-label` on
+ * each cell, which the row draws for itself:
  *
  *   Landlord                                       [monthly]
  *   Cadence                                         monthly

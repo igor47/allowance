@@ -571,9 +571,10 @@ describe("budget page", () => {
 })
 
 describe("phone layout", () => {
-  // The page must never scroll sideways: a 390px screen fits the navbar and
-  // the filters only because the brand is a 24px mark rather than a word, the
-  // page links collapse behind a toggle, and the filters wrap.
+  // The page must never scroll sideways. See the strategy comment at the top
+  // of the responsive section in `static/app.css`: three components switch at
+  // sm because that is where each stops fitting, and the transaction table
+  // switches at 880px because its columns need more than sm can give.
   test("the brand is the icon, which fits at every width", async () => {
     const brand = (await dashboard(august())).doc.querySelector(".navbar-brand")
     expect(brand?.getAttribute("class")).not.toContain("d-none")
@@ -595,13 +596,23 @@ describe("phone layout", () => {
     expect(toggler?.getAttribute("data-bs-target")).toBe("#nav-menu")
   })
 
-  test("the filter bar wraps instead of running off the edge", async () => {
+  test("the filter bar folds in one place rather than wherever it runs out", async () => {
     const page = await dashboard(august())
-    const bar = page.doc.querySelector("#txn-list .btn-group")?.getAttribute("class")
-    expect(bar).toContain("flex-wrap")
+    const bar = page.doc.querySelector("#txn-list .btn-group")
+    expect(bar?.getAttribute("class")).toContain("flex-wrap")
     // Below sm the joins come off and the seven become chips, because a button
     // group only knows how to square the edges of a single row.
-    expect(bar).toContain("filter-bar")
+    expect(bar?.getAttribute("class")).toContain("filter-bar")
+    // And the fold is placed, not left to the remainder: three views to triage
+    // in, then four ways to cut the month. Left to itself "All" changed rows
+    // twice between 390px and 500.
+    const kids = Array.from(bar?.children ?? [])
+    const fold = kids.findIndex((k) => (k.getAttribute("class") ?? "").includes("filter-break"))
+    expect(kids.slice(0, fold).map((k) => k.textContent?.trim())).toEqual([
+      `Needs review${page.reviewCount || ""}`,
+      "Spending",
+      "Deposits",
+    ])
   })
 
   test("the row's cells stay in the order the phone grid places them", async () => {

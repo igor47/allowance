@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { LmTransaction } from "../lunchmoney/types"
+import { CARD, CHECKING, OLD_CARD, SAVINGS, TEST_ACCOUNTS, WALLET } from "../test/accounts"
 import { tag, txn } from "../test/factories"
 import {
   aCharge,
@@ -12,20 +13,24 @@ import {
   aWalletCashout,
   aWalletPayment,
 } from "../test/world"
+import type { TransferIndex } from "./policy"
 import {
-  CHASE,
-  CHASE_UNITED,
-  classify,
-  FIDELITY_JOINT,
+  classify as classifyWith,
   findTransfers,
-  IGOR_PERSONAL,
-  unknownAccounts,
-  VENMO,
+  unknownAccounts as unknownAccountsIn,
 } from "./policy"
+
+/**
+ * Every example in this file is about the suite's accounts, so the policy is
+ * bound once here rather than being the third argument of forty calls.
+ */
+const classify = (txn: LmTransaction, transfers?: TransferIndex) =>
+  classifyWith(txn, TEST_ACCOUNTS, transfers)
+const unknownAccounts = (txns: LmTransaction[]) => unknownAccountsIn(txns, TEST_ACCOUNTS)
 
 describe("account policy", () => {
   test("untagged spend on the discretionary card counts", () => {
-    const result = classify(aCharge({ on: "2026-08-05", amount: 42, account: CHASE }))
+    const result = classify(aCharge({ on: "2026-08-05", amount: 42, account: CARD }))
     expect(result.counts).toBe(true)
     expect(result.bucket).toBe("spending")
     expect(result.reviewed).toBe(false)
@@ -37,7 +42,7 @@ describe("account policy", () => {
     const rent = aCharge({
       on: "2026-08-01",
       amount: 5000,
-      account: IGOR_PERSONAL,
+      account: CHECKING,
       payee: "A Landlord",
       category: "Rent",
     })
@@ -51,7 +56,7 @@ describe("account policy", () => {
       aCharge({
         on: "2026-08-04",
         amount: 200,
-        account: IGOR_PERSONAL,
+        account: CHECKING,
         payee: "CASH ADVANCE ATM",
         category: "Cash",
         tags: ["spending"],
@@ -62,7 +67,7 @@ describe("account policy", () => {
   })
 
   test("dormant accounts are ignored entirely", () => {
-    expect(classify(aCharge({ on: "2026-08-05", amount: 30, account: CHASE_UNITED })).bucket).toBe(
+    expect(classify(aCharge({ on: "2026-08-05", amount: 30, account: OLD_CARD })).bucket).toBe(
       "ignored"
     )
   })
@@ -77,10 +82,10 @@ describe("account policy", () => {
 
   test("the accounts with a policy are not reported as unknown", () => {
     const known = [
-      aCharge({ on: "2026-08-01", amount: 10, account: CHASE }),
-      aCharge({ on: "2026-08-01", amount: 10, account: IGOR_PERSONAL }),
-      aCharge({ on: "2026-08-01", amount: 10, account: FIDELITY_JOINT }),
-      aCharge({ on: "2026-08-01", amount: 10, account: CHASE_UNITED }),
+      aCharge({ on: "2026-08-01", amount: 10, account: CARD }),
+      aCharge({ on: "2026-08-01", amount: 10, account: CHECKING }),
+      aCharge({ on: "2026-08-01", amount: 10, account: SAVINGS }),
+      aCharge({ on: "2026-08-01", amount: 10, account: OLD_CARD }),
       aWalletPayment({ on: "2026-08-01", amount: 10, payee: "A Friend" }),
     ]
     expect(unknownAccounts(known)).toEqual([])
@@ -133,7 +138,7 @@ describe("negative amounts", () => {
       on: "2026-08-01",
       amount: 6000,
       payee: "DIRECT DEPOSIT PAYROLL",
-      into: IGOR_PERSONAL,
+      into: CHECKING,
     })
     expect(classify(payroll).counts).toBe(false)
   })
@@ -141,7 +146,7 @@ describe("negative amounts", () => {
   test("a card autopay leaving the bank account is not a review item", () => {
     // It is the card bill being paid, not spending, and it should never appear
     // in the queue — where a five-figure row would be the loudest thing there.
-    const result = classify(anAutopayDebit({ on: "2026-08-09", amount: 9000, from: IGOR_PERSONAL }))
+    const result = classify(anAutopayDebit({ on: "2026-08-09", amount: 9000, from: CHECKING }))
     expect(result.bucket).toBe("transfer")
     expect(result.counts).toBe(false)
   })
@@ -150,7 +155,7 @@ describe("negative amounts", () => {
     const rent = aCharge({
       on: "2026-08-01",
       amount: 5000,
-      account: IGOR_PERSONAL,
+      account: CHECKING,
       payee: "A Landlord",
       category: "Rent",
     })
@@ -185,7 +190,7 @@ describe("reimbursements", () => {
     aDeposit({
       on: "2026-08-07",
       amount: 154,
-      into: IGOR_PERSONAL,
+      into: CHECKING,
       payee: "CHECK RECEIVED",
       category: "💵 Income",
       ...over,
@@ -226,7 +231,7 @@ describe("reimbursements", () => {
   })
 
   test("the sweep that pairs with it is not a deposit", () => {
-    const sweep = classify(aSweep({ on: "2026-08-07", amount: 154, account: IGOR_PERSONAL }))
+    const sweep = classify(aSweep({ on: "2026-08-07", amount: 154, account: CHECKING }))
     expect(sweep.bucket).toBe("transfer")
     expect(sweep.reason).toBe("internal account sweep")
   })
@@ -285,7 +290,7 @@ describe("the wallet", () => {
       aCharge({
         on: "2026-08-02",
         amount: 150,
-        account: FIDELITY_JOINT,
+        account: SAVINGS,
         payee: "Venmo",
         category: "Payment, Transfer",
       })
@@ -330,21 +335,21 @@ describe("transfers between accounts we own", () => {
     const legs = aTransfer({
       on: "2026-08-10",
       amount: 2000,
-      from: IGOR_PERSONAL,
-      to: FIDELITY_JOINT,
+      from: CHECKING,
+      to: SAVINGS,
     })
     const [out, into] = verdicts(legs)
     expect(out?.bucket).toBe("transfer")
     expect(into?.bucket).toBe("transfer")
     // The reason names the other half, so a row explains itself in the list.
-    expect(out?.reason).toContain(FIDELITY_JOINT)
-    expect(into?.reason).toContain(IGOR_PERSONAL)
+    expect(out?.reason).toContain(SAVINGS)
+    expect(into?.reason).toContain(CHECKING)
   })
 
   test("emptying the wallet into the bank is no longer discretionary spend", () => {
     // The regression this rule exists for. The wallet leg lands on a spending
     // account under a payee no rule recognises, and counted in full.
-    const legs = aWalletCashout({ on: "2026-08-20", amount: 400, into: IGOR_PERSONAL })
+    const legs = aWalletCashout({ on: "2026-08-20", amount: 400, into: CHECKING })
     const [wallet, bank] = verdicts(legs)
     expect(wallet?.counts).toBe(false)
     expect(wallet?.bucket).toBe("transfer")
@@ -370,12 +375,12 @@ describe("transfers between accounts we own", () => {
       aCharge({
         on: "2026-08-10",
         amount: 400,
-        account: VENMO,
+        account: WALLET,
         payee: "Standard transfer",
         ...transfer,
       }),
-      aDeposit({ on: "2026-08-11", amount: 400, into: IGOR_PERSONAL, ...transfer }),
-      aDeposit({ on: "2026-08-11", amount: 400, into: FIDELITY_JOINT, ...transfer }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: CHECKING, ...transfer }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: SAVINGS, ...transfer }),
     ]
     expect(findTransfers(legs).size).toBe(0)
     const [wallet] = verdicts(legs)
@@ -388,24 +393,24 @@ describe("transfers between accounts we own", () => {
       aCharge({
         on: "2026-08-10",
         amount: 400,
-        account: VENMO,
+        account: WALLET,
         payee: "Standard transfer",
         ...transfer,
       }),
       aCharge({
         on: "2026-08-10",
         amount: 400,
-        account: FIDELITY_JOINT,
+        account: SAVINGS,
         payee: "A Move",
         ...transfer,
       }),
-      aDeposit({ on: "2026-08-11", amount: 400, into: IGOR_PERSONAL, ...transfer }),
+      aDeposit({ on: "2026-08-11", amount: 400, into: CHECKING, ...transfer }),
     ]
     expect(findTransfers(legs).size).toBe(0)
   })
 
   test("matching does not depend on the order the transactions arrive in", () => {
-    const legs = aTransfer({ on: "2026-08-10", amount: 2000, from: IGOR_PERSONAL, to: VENMO })
+    const legs = aTransfer({ on: "2026-08-10", amount: 2000, from: CHECKING, to: WALLET })
     expect(findTransfers(legs).size).toBe(2)
     expect(findTransfers([...legs].reverse()).size).toBe(2)
   })
@@ -414,8 +419,8 @@ describe("transfers between accounts we own", () => {
     const legs = aTransfer({
       on: "2026-08-10",
       amount: 2000,
-      from: IGOR_PERSONAL,
-      to: FIDELITY_JOINT,
+      from: CHECKING,
+      to: SAVINGS,
       settles: 4,
     })
     expect(findTransfers(legs).size).toBe(0)
@@ -427,8 +432,8 @@ describe("transfers between accounts we own", () => {
     const rows = aTransfer({
       on: "2026-08-10",
       amount: 400,
-      from: IGOR_PERSONAL,
-      to: IGOR_PERSONAL,
+      from: CHECKING,
+      to: CHECKING,
     })
     expect(findTransfers(rows).size).toBe(0)
     const [out] = verdicts(rows)
@@ -441,7 +446,7 @@ describe("transfers between accounts we own", () => {
     // separate things, so structure alone may not ignore either one.
     const rows = [
       aCharge({ on: "2026-08-08", amount: 300, payee: "A Restaurant" }),
-      aDeposit({ on: "2026-08-11", amount: 300, payee: "CHECK RECEIVED", into: IGOR_PERSONAL }),
+      aDeposit({ on: "2026-08-11", amount: 300, payee: "CHECK RECEIVED", into: CHECKING }),
     ]
     expect(findTransfers(rows).size).toBe(0)
     const [dinner, cheque] = verdicts(rows)
@@ -455,8 +460,8 @@ describe("transfers between accounts we own", () => {
     const rows = aTransfer({
       on: "2026-08-10",
       amount: 400,
-      from: IGOR_PERSONAL,
-      to: FIDELITY_JOINT,
+      from: CHECKING,
+      to: SAVINGS,
       toTags: ["spending"],
     })
     const [out, repaid] = verdicts(rows)
@@ -469,7 +474,7 @@ describe("transfers between accounts we own", () => {
   test("the card autopay is matched structurally, as well as by payee", () => {
     const legs = [
       anAutopay({ on: "2026-08-09", amount: 9000 }),
-      anAutopayDebit({ on: "2026-08-09", amount: 9000, from: IGOR_PERSONAL }),
+      anAutopayDebit({ on: "2026-08-09", amount: 9000, from: CHECKING }),
     ]
     expect(findTransfers(legs).size).toBe(2)
     for (const verdict of verdicts(legs)) expect(verdict.counts).toBe(false)
@@ -488,7 +493,7 @@ describe("saying so by hand", () => {
       aCharge({
         on: "2026-08-02",
         amount: 1072,
-        account: IGOR_PERSONAL,
+        account: CHECKING,
         payee: "Venmo",
         category: "Payment, Transfer",
         tags: ["transfer"],
@@ -519,7 +524,7 @@ describe("saying so by hand", () => {
     // The check runs before the tags, so a button here would do nothing. Not
     // rendering it is the honest answer.
     const dormant = classify(
-      aCharge({ on: "2026-08-05", amount: 40, account: CHASE_UNITED, tags: ["spending"] })
+      aCharge({ on: "2026-08-05", amount: 40, account: OLD_CARD, tags: ["spending"] })
     )
     expect(dormant.bucket).toBe("ignored")
     expect(dormant.taggable).toBe(false)

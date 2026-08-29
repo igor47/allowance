@@ -14,6 +14,8 @@ export interface AppEnv {
     user?: string
     service: DashboardService
     today: () => IsoDate
+    /** The whole config, so a route can render what the file says. */
+    config: Config
   }
 }
 
@@ -41,6 +43,7 @@ export function createApp({ client, config, today, clock, log = console.log }: A
   app.use("*", async (c, next) => {
     c.set("service", service)
     c.set("today", now)
+    c.set("config", config)
     await next()
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { CHASE, FIDELITY_JOINT, IGOR_PERSONAL } from "../domain/policy"
+import { CARD, CHECKING, SAVINGS } from "../test/accounts"
 import { txn } from "../test/factories"
 import { dashboard, visit } from "../test/page"
 import { aWorld } from "../test/world"
@@ -18,9 +18,9 @@ import { aWorld } from "../test/world"
  */
 const august = () =>
   aWorld({ today: "2026-08-14" })
-    .account(CHASE, { balance: "1200.00" })
-    .account(IGOR_PERSONAL, { balance: "5000.00" })
-    .account(FIDELITY_JOINT, { balance: "2000.00" })
+    .account(CARD, { balance: "1200.00" })
+    .account(CHECKING, { balance: "5000.00" })
+    .account(SAVINGS, { balance: "2000.00" })
     .deposit({ on: "2026-08-01", amount: 4_000, payee: "PAYROLL" })
     .charge({ on: "2026-08-03", amount: 100, payee: "A Grocer" })
     .charge({ on: "2026-08-08", amount: 300, payee: "A Restaurant" })
@@ -28,7 +28,7 @@ const august = () =>
     .charge({
       on: "2026-08-12",
       amount: 5_000,
-      account: IGOR_PERSONAL,
+      account: CHECKING,
       payee: "A Landlord",
       category: "Rent",
     })
@@ -84,9 +84,9 @@ describe("dashboard", () => {
       "deposit",
     ])
     expect(rows[1]?.reason).toBe("tagged recurring")
-    expect(rows[3]?.reason).toBe(`untagged on ${CHASE}`)
+    expect(rows[3]?.reason).toBe(`untagged on ${CARD}`)
     // The account chip appears only for accounts other than the card.
-    expect(rows[0]?.account).toBe(IGOR_PERSONAL)
+    expect(rows[0]?.account).toBe(CHECKING)
     expect(rows[3]?.account).toBe("")
   })
 
@@ -276,7 +276,7 @@ describe("deposits", () => {
       on: "2026-08-11",
       amount: 300,
       payee: "CHECK RECEIVED",
-      into: IGOR_PERSONAL,
+      into: CHECKING,
     })
     const id = world.transactions.find((t) => t.payee === "CHECK RECEIVED")?.id as number
     const session = visit(world)
@@ -302,7 +302,7 @@ describe("the statement check", () => {
       // far enough for the reconstruction to mean anything.
       .charge({ on: "2026-06-09", amount: 0.01, payee: "An Older Charge" })
       .charge({ on: "2026-06-20", amount: billed, payee: "An Earlier Charge" })
-      .autopay({ on: "2026-08-09", amount: paid, from: IGOR_PERSONAL })
+      .autopay({ on: "2026-08-09", amount: paid, from: CHECKING })
 
   test("says nothing when the reconstruction matches what Chase debited", async () => {
     const page = await dashboard(withASettledStatement(1_000, 1_000))
@@ -323,7 +323,7 @@ describe("the statement check", () => {
     // Both halves of it: a five-figure row would be the loudest thing there.
     const page = await dashboard(withASettledStatement(1_000, 1_000))
     expect(page.rows.map((r) => r.payee)).not.toContain("AUTOMATIC PAYMENT - THANK")
-    expect(page.rows.map((r) => r.payee)).not.toContain("DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)")
+    expect(page.rows.map((r) => r.payee)).not.toContain("DIRECT DEBIT CARD CREDIT CAUTOPAY (Cash)")
   })
 
   test("stays quiet when the payment has not landed yet", async () => {
@@ -339,7 +339,7 @@ describe("the statement check", () => {
     // The charges it settled are outside the linked history, so there is
     // nothing to reconstruct — and a five-figure "discrepancy" would be a lie.
     const page = await dashboard(
-      august().autopay({ on: "2026-08-09", amount: 9_000, from: IGOR_PERSONAL })
+      august().autopay({ on: "2026-08-09", amount: 9_000, from: CHECKING })
     )
     expect(page.banners).toEqual([])
   })
@@ -679,7 +679,7 @@ describe("phone layout", () => {
     expect(lines[0]?.getAttribute("title")).toBe(long)
     expect(lines[1]?.getAttribute("title")).toBe("Groceries")
     expect(row?.querySelector(".txn-line .fst-italic")?.getAttribute("title")).toBe(
-      "untagged on Card"
+      `untagged on ${CARD}`
     )
     // A line with nothing in it collapses on a phone, so it must stay empty —
     // a stray whitespace node from the markup would defeat `.txn-line:empty`.
@@ -756,7 +756,7 @@ describe("the two filter axes", () => {
         on: "2026-08-07",
         amount: 500,
         payee: "Igor Insurance",
-        account: IGOR_PERSONAL,
+        account: CHECKING,
         tags: ["igor", "irregular"],
       })
 
@@ -863,8 +863,8 @@ describe("the summary line", () => {
       august().transfer({
         on: "2026-08-05",
         amount: 500,
-        from: FIDELITY_JOINT,
-        to: IGOR_PERSONAL,
+        from: SAVINGS,
+        to: CHECKING,
       }),
       "?filter=all"
     )
@@ -879,7 +879,7 @@ describe("the summary line", () => {
 
 describe("transfers in the list", () => {
   const withACashout = () =>
-    august().transfer({ on: "2026-08-05", amount: 500, from: IGOR_PERSONAL, to: CHASE })
+    august().transfer({ on: "2026-08-05", amount: 500, from: CHECKING, to: CARD })
 
   test("neither leg moves the allowance", async () => {
     expect((await dashboard(august())).hero).toBe("$2,400")

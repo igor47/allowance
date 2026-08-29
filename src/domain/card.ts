@@ -7,11 +7,14 @@
  * everything on the card except payments.
  *
  * Cycles are bucketed by *posted* date, not the Lunch Money date. Lunch Money
- * reports Plaid's authorized date — when the card was swiped — and Chase bills
- * on the date the charge posts, one or two days later. Using the posted date
- * matches the statement exactly, and `reconcile()` below re-checks that against
- * Chase every month. Using the Lunch Money date is off by a few hundred
- * dollars a month.
+ * reports Plaid's authorized date — when the card was swiped — and the issuer
+ * bills on the date the charge posts, one or two days later. Using the posted
+ * date matches the statement exactly, and `reconcile()` below re-checks that
+ * against the issuer every month. Using the Lunch Money date is off by a few
+ * hundred dollars a month.
+ *
+ * Which account is the card is configuration: every function here takes the
+ * display name, and `statementAccount()` in `policy.ts` is where it comes from.
  */
 
 import { postedDate } from "../lunchmoney/details"
@@ -19,10 +22,7 @@ import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { Cycle } from "./cycle"
 import { addDays, type IsoDate } from "./dates"
-import { CHASE, isCardPayment } from "./policy"
-
-/** The card whose statement cycle drives the summary boxes. */
-export const STATEMENT_ACCOUNT: string = CHASE
+import { isCardPayment } from "./policy"
 
 export interface CycleTotal {
   charges: number
@@ -38,7 +38,7 @@ const EMPTY: CycleTotal = { charges: 0, credits: 0, net: 0, count: 0 }
  * and category are not consulted — a $196 hotel deposit is on the bill whether
  * or not it got filed as a transfer — so only payments are taken out.
  */
-export function isCardCharge(txn: LmTransaction, account: string = STATEMENT_ACCOUNT): boolean {
+export function isCardCharge(txn: LmTransaction, account: string): boolean {
   if (accountNameOf(txn) !== account) return false
   return !isCardPayment(txn)
 }
@@ -47,7 +47,7 @@ export function cycleTotal(
   txns: LmTransaction[],
   start: IsoDate,
   end: IsoDate,
-  account: string = STATEMENT_ACCOUNT
+  account: string
 ): CycleTotal {
   const total = { ...EMPTY }
   for (const txn of txns) {
@@ -64,7 +64,7 @@ export function cycleTotal(
 }
 
 /**
- * Checking the reconstruction against Chase, every month, forever.
+ * Checking the reconstruction against the issuer, every month, forever.
  *
  * `cycleTotal()` rebuilds a statement Lunch Money does not store, and until now
  * that reconstruction was validated once, by hand, against a downloaded PDF.
@@ -72,8 +72,8 @@ export function cycleTotal(
  * that goes unnoticed for months, so it is worth an oracle that is not us.
  *
  * The oracle is already in the data. Statements are paid in full, so the
- * autopay Chase debits *is* Chase stating what the statement came to. Chase's
- * own identity for a statement is
+ * autopay the issuer debits *is* the issuer stating what the statement came
+ * to. Their own identity for a statement is
  *
  *     NewBalance = PreviousBalance − Payments − Credits + Purchases
  *
@@ -125,7 +125,8 @@ export interface Reconciliation {
 }
 
 export interface ReconcileOptions {
-  account?: string
+  /** The card's display name. Required: there is no default card any more. */
+  account: string
   /**
    * The earliest date the caller asked the API for.
    *
@@ -140,9 +141,9 @@ export interface ReconcileOptions {
 export function reconcile(
   txns: LmTransaction[],
   cycle: Cycle,
-  options: ReconcileOptions = {}
+  options: ReconcileOptions
 ): Reconciliation {
-  const account = options.account ?? STATEMENT_ACCOUNT
+  const { account } = options
   const onCard = txns.filter((t) => accountNameOf(t) === account)
   const billed = cycleTotal(txns, cycle.start, cycle.end, account).charges
 

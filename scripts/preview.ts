@@ -13,15 +13,15 @@
  */
 
 import { createApp } from "../src/app"
-import { CHASE, FIDELITY_JOINT, IGOR_PERSONAL, VENMO } from "../src/domain/policy"
+import { CARD, CHECKING, SAVINGS, WALLET } from "../src/test/accounts"
 import { FakeLunchMoneyClient } from "../src/test/fake-client"
 import { aWorld } from "../src/test/world"
 
 const world = aWorld({ today: "2026-08-14" })
-  .account(CHASE, { balance: "2431.55" })
-  .account(IGOR_PERSONAL, { balance: "8420.10" })
-  .account(FIDELITY_JOINT, { balance: "15300.00" })
-  .account(VENMO, { balance: "120.00" })
+  .account(CARD, { balance: "2431.55" })
+  .account(CHECKING, { balance: "8420.10" })
+  .account(SAVINGS, { balance: "15300.00" })
+  .account(WALLET, { balance: "120.00" })
 
   // Spending on the card, including the long payees and descriptors that are
   // what actually break a narrow layout.
@@ -59,31 +59,31 @@ const world = aWorld({ today: "2026-08-14" })
     on: "2026-08-03",
     amount: 3400,
     payee: "Landlord",
-    account: IGOR_PERSONAL,
+    account: CHECKING,
     category: "Rent",
   })
   .charge({
     on: "2026-08-04",
     amount: 88.12,
     payee: "PG&E",
-    account: IGOR_PERSONAL,
+    account: CHECKING,
     category: "Utilities",
   })
-  .deposit({ on: "2026-08-01", amount: 6200, payee: "Acme Payroll", into: IGOR_PERSONAL })
+  .deposit({ on: "2026-08-01", amount: 6200, payee: "Acme Payroll", into: CHECKING })
   .deposit({
     on: "2026-08-06",
     amount: 130,
     payee: "A Friend",
-    into: IGOR_PERSONAL,
+    into: CHECKING,
     tags: ["spending"],
   })
 
   // A matched pair, an autopay, and a wallet, so every bucket has a row.
-  .autopay({ on: "2026-08-09", amount: 1875.44, from: IGOR_PERSONAL })
-  .transfer({ on: "2026-08-02", amount: 2000, from: FIDELITY_JOINT, to: IGOR_PERSONAL })
+  .autopay({ on: "2026-08-09", amount: 1875.44, from: CHECKING })
+  .transfer({ on: "2026-08-02", amount: 2000, from: SAVINGS, to: CHECKING })
   .walletPayment({ on: "2026-08-12", amount: 45, payee: "Serena", category: "Dining" })
-  .walletCashout({ on: "2026-08-07", amount: 300, into: IGOR_PERSONAL })
-  .sweep({ on: "2026-08-05", amount: 500, account: FIDELITY_JOINT })
+  .walletCashout({ on: "2026-08-07", amount: 300, into: CHECKING })
+  .sweep({ on: "2026-08-05", amount: 500, account: SAVINGS })
 
   // Enough of the plan for the budget page to have something to say.
   .income({ payee: "Acme Payroll", amount: 6200, granularity: "month", quantity: 1 })

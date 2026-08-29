@@ -11,7 +11,6 @@ import {
   TransactionList,
   TransactionRow,
 } from "../components/Transactions"
-import { HISTORY_START } from "../config"
 import { endOfMonth, type IsoDate } from "../domain/dates"
 import { tagNames } from "../domain/policy"
 import { nextTags, parseTagAction } from "../domain/tagging"
@@ -61,7 +60,8 @@ interface MonthView {
  */
 const viewOf = (
   c: { req: { query(name: string): string | undefined } },
-  today: IsoDate
+  today: IsoDate,
+  historyStart: string
 ): MonthView => {
   const current = today.slice(0, 7)
   const y = c.req.query("y")
@@ -69,7 +69,7 @@ const viewOf = (
   const asked = y && m ? `${y}-${m.padStart(2, "0")}` : (c.req.query("month") ?? current)
 
   let month = /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) ? asked : current
-  if (month < HISTORY_START) month = HISTORY_START
+  if (month < historyStart) month = historyStart
   if (month > current) month = current
 
   const isCurrent = month === current
@@ -78,7 +78,7 @@ const viewOf = (
 
 dashboardRoutes.get("/", async (c) => {
   const today = c.var.today()
-  const view = viewOf(c, today)
+  const view = viewOf(c, today, c.var.config.historyStart)
   const dashboard = await c.var.service.build(view.asOf)
   const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
   const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
@@ -103,6 +103,7 @@ dashboardRoutes.get("/", async (c) => {
             latest={today.slice(0, 7)}
             filter={sel.view}
             who={sel.who}
+            historyStart={c.var.config.historyStart}
           />
           <Sync dashboard={dashboard} />
         </>
@@ -133,6 +134,7 @@ dashboardRoutes.get("/", async (c) => {
         sel={sel}
         needsReview={dashboard.needsReview}
         summary={summarise(entries)}
+        card={dashboard.card.account}
       />
     </Layout>
   )
@@ -145,7 +147,7 @@ dashboardRoutes.get("/", async (c) => {
  */
 dashboardRoutes.get("/budget", async (c) => {
   const today = c.var.today()
-  const view = viewOf(c, today)
+  const view = viewOf(c, today, c.var.config.historyStart)
   const [budget, dashboard] = await Promise.all([
     c.var.service.budget(view.asOf),
     c.var.service.build(view.asOf),
@@ -158,7 +160,12 @@ dashboardRoutes.get("/budget", async (c) => {
       page="budget"
       nav={
         <>
-          <MonthPicker month={view.month} latest={today.slice(0, 7)} action="/budget" />
+          <MonthPicker
+            month={view.month}
+            latest={today.slice(0, 7)}
+            historyStart={c.var.config.historyStart}
+            action="/budget"
+          />
           <Sync dashboard={dashboard} />
         </>
       }
@@ -201,7 +208,7 @@ dashboardRoutes.post("/refresh", async (c) => {
 
 /** HTMX partial: swap the transaction list when a filter is clicked. */
 dashboardRoutes.get("/transactions", async (c) => {
-  const view = viewOf(c, c.var.today())
+  const view = viewOf(c, c.var.today(), c.var.config.historyStart)
   const dashboard = await c.var.service.build(view.asOf)
   const sel = selectionOf(c, view.isCurrent ? undefined : view.month)
   const entries = applyFilter(dashboard.transactions, sel.view, sel.who)
@@ -211,6 +218,7 @@ dashboardRoutes.get("/transactions", async (c) => {
       sel={sel}
       needsReview={dashboard.needsReview}
       summary={summarise(entries)}
+      card={dashboard.card.account}
     />
   )
 })
@@ -230,7 +238,7 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
     return c.text("unknown tag", 400)
   }
 
-  const view = viewOf(c, c.var.today())
+  const view = viewOf(c, c.var.today(), c.var.config.historyStart)
   const before = await c.var.service.build(view.asOf)
   const target = before.transactions.find((entry) => entry.txn.id === id)
   if (!target) return c.text("transaction not found in the current period", 404)
@@ -243,7 +251,11 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
 
   return c.html(
     <>
-      <TransactionRow entry={updated} month={view.isCurrent ? undefined : view.month} />
+      <TransactionRow
+        entry={updated}
+        month={view.isCurrent ? undefined : view.month}
+        card={after.card.account}
+      />
       {/*
         The count comes back out of band with the row, so the badge falls as
         the queue does. That is the whole point of the number: a triage

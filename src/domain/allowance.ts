@@ -10,7 +10,7 @@
 import type { AllowanceConfig } from "../config"
 import type { LmTransaction } from "../lunchmoney/types"
 import { daysBetween, eachDay, endOfMonth, type IsoDate, startOfMonth } from "./dates"
-import { type Classification, classify, findTransfers } from "./policy"
+import { type Accounts, type Classification, classify, findTransfers } from "./policy"
 
 export interface DayRow {
   date: IsoDate
@@ -69,9 +69,9 @@ export interface ClassifiedTransaction {
  * whose other half falls outside it cannot be matched, so a transfer made today
  * counts as spend until tomorrow's fetch brings its partner in.
  */
-export function classifyAll(txns: LmTransaction[]): ClassifiedTransaction[] {
+export function classifyAll(txns: LmTransaction[], accounts: Accounts): ClassifiedTransaction[] {
   const transfers = findTransfers(txns)
-  return txns.map((txn) => ({ txn, classification: classify(txn, transfers) }))
+  return txns.map((txn) => ({ txn, classification: classify(txn, accounts, transfers) }))
 }
 
 export function computeAllowance(

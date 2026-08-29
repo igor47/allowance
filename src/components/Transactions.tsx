@@ -1,5 +1,4 @@
 import type { ClassifiedTransaction } from "../domain/allowance"
-import { STATEMENT_ACCOUNT } from "../domain/card"
 import type { Bucket, TAG } from "../domain/policy"
 import { detailsOf } from "../lunchmoney/details"
 import { accountNameOf } from "../lunchmoney/types"
@@ -101,9 +100,16 @@ const TagButton = ({
 export const TransactionRow = ({
   entry,
   month,
+  card,
 }: {
   entry: ClassifiedTransaction
   month?: string
+  /**
+   * The statement card's display name. Rows on it are the common case and get
+   * no badge; everything else is worth naming. Absent when no card is
+   * configured, in which case every row is named.
+   */
+  card?: string
 }) => {
   const { txn, classification } = entry
   const tags = txn.tags.map((t) => t.name.toLowerCase())
@@ -166,7 +172,7 @@ export const TransactionRow = ({
           {facts.join(" · ")}
         </div>
         <div class="txn-line small">
-          {account !== STATEMENT_ACCOUNT ? (
+          {account !== card ? (
             <span class="badge text-bg-dark border border-secondary me-1">{account}</span>
           ) : null}
           {txn.is_pending ? <span class="badge text-bg-warning me-1">pending</span> : null}
@@ -387,9 +393,17 @@ export interface TransactionListProps {
   entries: ClassifiedTransaction[]
   needsReview: number
   summary: FilterSummary
+  /** The statement card's display name; see `TransactionRow`. */
+  card?: string
 }
 
-export const TransactionList = ({ entries, sel, needsReview, summary }: TransactionListProps) => (
+export const TransactionList = ({
+  entries,
+  sel,
+  needsReview,
+  summary,
+  card,
+}: TransactionListProps) => (
   <div id="txn-list">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
       <h2 class="h6 text-secondary stat-label mb-0">Transactions</h2>
@@ -427,7 +441,7 @@ export const TransactionList = ({ entries, sel, needsReview, summary }: Transact
         <table class="table table-sm txn-table align-middle mb-0">
           <tbody>
             {entries.map((entry) => (
-              <TransactionRow entry={entry} month={sel.month} />
+              <TransactionRow entry={entry} month={sel.month} card={card} />
             ))}
           </tbody>
         </table>

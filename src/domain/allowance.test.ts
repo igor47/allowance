@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { AllowanceConfig } from "../config"
+import { CHECKING, TEST_ACCOUNTS } from "../test/accounts"
 import { aCharge, aRefund, TEST_CONFIG } from "../test/world"
-import { classifyAll, computeAllowance } from "./allowance"
-import { IGOR_PERSONAL } from "./policy"
+import { classifyAll as classifyIn, computeAllowance } from "./allowance"
 
 const CONFIG: AllowanceConfig = TEST_CONFIG.allowance
 
-const compute = (txns: Parameters<typeof classifyAll>[0], today: string) =>
+const classifyAll = (txns: Parameters<typeof classifyIn>[0]) => classifyIn(txns, TEST_ACCOUNTS)
+const compute = (txns: Parameters<typeof classifyIn>[0], today: string) =>
   computeAllowance(classifyAll(txns), CONFIG, today)
 
 describe("rolling balance", () => {
@@ -69,7 +70,7 @@ describe("rolling balance", () => {
     const result = compute(
       [
         aCharge({ on: "2026-08-01", amount: 675, tags: ["recurring"] }),
-        aCharge({ on: "2026-08-01", amount: 5000, account: IGOR_PERSONAL }),
+        aCharge({ on: "2026-08-01", amount: 5000, account: CHECKING }),
       ],
       "2026-08-01"
     )

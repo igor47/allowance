@@ -19,6 +19,9 @@ logs
 .env.local
 mise.local.toml
 
+# the real config; allowance.example.toml is the one that ships
+allowance.toml
+
 # caches
 .cache
 *.tsbuildinfo

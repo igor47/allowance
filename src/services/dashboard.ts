@@ -9,17 +9,11 @@ import {
   periodStartFor,
 } from "../domain/allowance"
 import { type BudgetView, budgetView } from "../domain/budget"
-import {
-  type CycleTotal,
-  cycleTotal,
-  type Reconciliation,
-  reconcile,
-  STATEMENT_ACCOUNT,
-} from "../domain/card"
+import { type CycleTotal, cycleTotal, type Reconciliation, reconcile } from "../domain/card"
 import { type Cycle, cycleView } from "../domain/cycle"
 import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
-import { unknownAccounts } from "../domain/policy"
+import { statementAccount, unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
 import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
 
@@ -116,16 +110,20 @@ export class DashboardService {
   }
 
   private async load(start: IsoDate, end: IsoDate) {
-    const [transactions, accounts] = await Promise.all([
+    const [transactions, plaidAccounts] = await Promise.all([
       this.cache.fetch(`txns:${start}:${end}`, () => this.client.transactions(start, end)),
       this.cache.fetch("accounts", () => this.client.plaidAccounts()),
     ])
-    return { transactions, accounts }
+    return { transactions, plaidAccounts }
   }
 
   async build(today: IsoDate): Promise<Dashboard> {
-    const { statementCloseDay, statementDueDay, allowance } = this.config
-    const cycles = cycleView(today, statementCloseDay, statementDueDay)
+    const { accounts, allowance } = this.config
+    // A config with no card is legitimate — the allowance works without one —
+    // but the summary boxes and the reconciliation line have nothing to be
+    // about, so `card` is null and the components say so.
+    const card = statementAccount(accounts)
+    const cycles = cycleView(today, card?.statement.closeDay ?? 1, card?.statement.dueDay ?? 1)
 
     // One fetch covering the budgeting period, the open statement, and the one
     // before it — which is the only statement the autopay has settled, and so
@@ -140,42 +138,52 @@ export class DashboardService {
     const periodStart = periodStartFor(allowance, today)
     const earliest = periodStart < cycles.settled.start ? periodStart : cycles.settled.start
     const start = addDays(earliest, -POSTING_SLACK_DAYS)
-    const { transactions, accounts } = await this.load(start, today)
+    // `accounts` here is the config's policy; the API's are `plaidAccounts`.
+    const { transactions, plaidAccounts } = await this.load(start, today)
 
-    const classified = classifyAll(transactions)
+    const classified = classifyAll(transactions, accounts)
     const inPeriod = classified
       .filter((c) => c.txn.date >= periodStart && c.txn.date <= today)
       .sort((a, b) =>
         a.txn.date === b.txn.date ? b.txn.id - a.txn.id : b.txn.date.localeCompare(a.txn.date)
       )
 
-    const lastClosedTotal = cycleTotal(transactions, cycles.lastClosed.start, cycles.lastClosed.end)
-    const currentTotal = cycleTotal(transactions, cycles.current.start, cycles.current.end)
-    const settledTotal = cycleTotal(transactions, cycles.settled.start, cycles.settled.end)
-    const reported = balanceOf(accounts, STATEMENT_ACCOUNT)
+    const on = card?.name ?? ""
+    const lastClosedTotal = cycleTotal(
+      transactions,
+      cycles.lastClosed.start,
+      cycles.lastClosed.end,
+      on
+    )
+    const currentTotal = cycleTotal(transactions, cycles.current.start, cycles.current.end, on)
+    const settledTotal = cycleTotal(transactions, cycles.settled.start, cycles.settled.end, on)
+    const reported = balanceOf(plaidAccounts, on)
 
     return {
       today,
       allowance: computeAllowance(classified, allowance, today),
-      cash: cashAccounts(accounts),
+      cash: cashAccounts(plaidAccounts),
       card: {
-        account: STATEMENT_ACCOUNT,
+        account: on,
         reported,
         lastClosed: { ...cycles.lastClosed, total: lastClosedTotal },
         current: { ...cycles.current, total: currentTotal },
         settled: {
           ...cycles.settled,
           total: settledTotal,
-          reconciliation: reconcile(transactions, cycles.settled, { windowStart: start }),
+          reconciliation: reconcile(transactions, cycles.settled, {
+            account: on,
+            windowStart: start,
+          }),
         },
       },
       transactions: inPeriod,
       // Deposits are taggable but not review items — payroll arriving twice a
       // month is not a question anyone needs asked. They live under "deposits".
       needsReview: inPeriod.filter(needsReview).length,
-      unknownAccounts: unknownAccounts(transactions),
+      unknownAccounts: unknownAccounts(transactions, accounts),
       freshness: freshness(
-        accounts,
+        plaidAccounts,
         this.config.refreshAfterMinutes,
         transactions.reduce<string | null>(
           (max, t) => (max === null || t.date > max ? t.date : max),

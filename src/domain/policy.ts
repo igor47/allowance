@@ -3,15 +3,19 @@
  *
  * The rule that will bite you: inclusion is PER-ACCOUNT, not global.
  *
- * On Card — the discretionary card — untagged means "nobody has
- * classified this yet", and it counts. Errors therefore make the number more
- * conservative, not less.
+ * On a `spending` account — the discretionary card — untagged means "nobody
+ * has classified this yet", and it counts. Errors therefore make the number
+ * more conservative, not less.
  *
- * On Checking the same rule is catastrophic: rent and the Chase autopay
+ * On a bank account the same rule is catastrophic: rent and the card autopay
  * both leave from there untagged, and together they outweigh a month of
- * discretionary spending by an order of magnitude. So the bank accounts are
- * opt-in — only an explicit `spending` tag counts, which is how ATM cash
+ * discretionary spending by an order of magnitude. Those are `fixed`, where
+ * only an explicit `spending` tag counts — which is also how ATM cash
  * withdrawals make it into the number.
+ *
+ * Which account is which is configuration rather than code. It arrives as an
+ * `Accounts` argument, threaded from `allowance.toml`, so this file names no
+ * bank and the same rules ship to anyone.
  */
 
 import { accountNameOf, type LmTransaction } from "../lunchmoney/types"
@@ -45,34 +49,32 @@ export type AccountPolicy =
   /** Dormant or irrelevant. Never counts, never shown in the review queue. */
   | "ignore"
 
+/** The billing cycle of the one account that has one. */
+export interface StatementConfig {
+  /** Day of the month the statement closes. */
+  closeDay: number
+  /** Day of the *following* month the autopay debits. */
+  dueDay: number
+}
+
+export interface AccountConfig {
+  policy: AccountPolicy
+  /**
+   * Set on exactly one account: the credit card whose cycle drives the summary
+   * boxes and the reconciliation line. Absent everywhere else.
+   */
+  statement?: StatementConfig
+}
+
 /**
  * The accounts, by the display name Lunch Money gives them.
  *
- * Exported as constants because policy keys on the name: a scenario that
- * invents one silently lands in `UNKNOWN_ACCOUNT_POLICY` and passes for the
- * wrong reason. These are production configuration, not private data.
+ * Keyed by the display name because that is the only handle a transaction
+ * carries — `accountNameOf()` is a string, and matching it is what policy is.
+ * A name that does not match exactly is not an error here; it is an unknown
+ * account, which `unknownAccounts()` surfaces rather than swallows.
  */
-export const CHASE = "Card"
-export const VENMO = "Wallet"
-export const IGOR_PERSONAL = "Checking"
-export const FIDELITY_JOINT = "Savings"
-export const CHASE_UNITED = "Old Card"
-
-/** An account the policy has an opinion about. Anything else is unknown. */
-export type KnownAccount =
-  | typeof CHASE
-  | typeof VENMO
-  | typeof IGOR_PERSONAL
-  | typeof FIDELITY_JOINT
-  | typeof CHASE_UNITED
-
-export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
-  [CHASE]: "spending",
-  [VENMO]: "spending",
-  [IGOR_PERSONAL]: "fixed",
-  [FIDELITY_JOINT]: "fixed",
-  [CHASE_UNITED]: "ignore",
-}
+export type Accounts = Readonly<Record<string, AccountConfig>>
 
 /**
  * Accounts we have never seen are treated as fixed rather than discretionary.
@@ -81,8 +83,25 @@ export const ACCOUNT_POLICY: Record<string, AccountPolicy> = {
  */
 export const UNKNOWN_ACCOUNT_POLICY: AccountPolicy = "fixed"
 
-export function policyFor(accountName: string): AccountPolicy {
-  return ACCOUNT_POLICY[accountName] ?? UNKNOWN_ACCOUNT_POLICY
+export function policyFor(accountName: string, accounts: Accounts): AccountPolicy {
+  return accounts[accountName]?.policy ?? UNKNOWN_ACCOUNT_POLICY
+}
+
+/**
+ * The account whose statement the summary is about, and when it cycles.
+ *
+ * Exactly one account may carry `statement`; the loader rejects a config with
+ * two, so by the time this runs the answer is unambiguous. Null means no card
+ * was configured, which is a legitimate setup — the allowance still works, and
+ * the summary simply has no statement to show.
+ */
+export function statementAccount(
+  accounts: Accounts
+): { name: string; statement: StatementConfig } | null {
+  for (const [name, account] of Object.entries(accounts)) {
+    if (account.statement) return { name, statement: account.statement }
+  }
+  return null
 }
 
 export type Bucket =
@@ -295,10 +314,14 @@ export function tagNames(txn: LmTransaction): string[] {
  * window. Omitting it costs only the pairing rule, which is why the domain
  * tests can still classify a single transaction on its own.
  */
-export function classify(txn: LmTransaction, transfers?: TransferIndex): Classification {
+export function classify(
+  txn: LmTransaction,
+  accounts: Accounts,
+  transfers?: TransferIndex
+): Classification {
   const amount = Number.parseFloat(txn.amount)
   const account = accountNameOf(txn)
-  const policy = policyFor(account)
+  const policy = policyFor(account, accounts)
   const tags = tagNames(txn)
 
   // Structural facts first, and they beat the tags: an untracked account, a
@@ -413,11 +436,11 @@ export function classify(txn: LmTransaction, transfers?: TransferIndex): Classif
 }
 
 /** Account names present in the data that have no explicit policy. */
-export function unknownAccounts(txns: LmTransaction[]): string[] {
+export function unknownAccounts(txns: LmTransaction[], accounts: Accounts): string[] {
   const seen = new Set<string>()
   for (const txn of txns) {
     const name = accountNameOf(txn)
-    if (!(name in ACCOUNT_POLICY)) seen.add(name)
+    if (!(name in accounts)) seen.add(name)
   }
   return [...seen].sort()
 }

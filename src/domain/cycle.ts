@@ -1,10 +1,11 @@
 /**
  * Credit card statement cycles.
  *
- * Card closes on the 12th and the autopay debits Fidelity on the 9th
- * of the following month. That gives two numbers worth showing separately: what
- * is about to leave the checking account, and what is quietly accruing toward
- * the bill after it.
+ * A card closes on one day of the month and its autopay debits a bank account
+ * on another, the following month — the 12th and the 9th, say. That gives two
+ * numbers worth showing separately: what is about to leave the checking
+ * account, and what is quietly accruing toward the bill after it. Both days
+ * come from the card's `statement` block in `allowance.toml`.
  */
 
 import type { IsoDate } from "./dates"
@@ -24,7 +25,8 @@ export interface CycleView {
    * The statement before last: closed, due, and already paid.
    *
    * The only cycle the app can check its own arithmetic against, because it is
-   * the only one Chase has stated a figure for — the autopay that settled it.
+   * the only one the issuer has stated a figure for — the autopay that settled
+   * it.
    * See `reconcile()` in card.ts.
    */
   settled: Cycle

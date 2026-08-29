@@ -1,8 +1,23 @@
 import { describe, expect, test } from "bun:test"
+import type { LmTransaction } from "../lunchmoney/types"
+import { CARD, CHECKING } from "../test/accounts"
 import { aCharge, anAutopay, anAutopayDebit, aRefund } from "../test/world"
-import { cycleTotal, reconcile } from "./card"
+import { cycleTotal as cycleTotalOn, type ReconcileOptions, reconcile as reconcileOn } from "./card"
+import type { Cycle } from "./cycle"
 import { cycleView } from "./cycle"
-import { IGOR_PERSONAL } from "./policy"
+import type { IsoDate } from "./dates"
+
+/**
+ * Every statement in this file is the suite's card, so it is bound once here
+ * rather than being the last argument of thirty calls.
+ */
+const cycleTotal = (txns: LmTransaction[], start: IsoDate, end: IsoDate) =>
+  cycleTotalOn(txns, start, end, CARD)
+const reconcile = (
+  txns: LmTransaction[],
+  cycle: Cycle,
+  options: Omit<ReconcileOptions, "account"> = {}
+) => reconcileOn(txns, cycle, { ...options, account: CARD })
 
 describe("cycle totals", () => {
   test("sums charges and credits on the statement card only", () => {
@@ -10,7 +25,7 @@ describe("cycle totals", () => {
       [
         aCharge({ on: "2026-08-01", amount: 100 }),
         aRefund({ on: "2026-08-02", amount: 25 }),
-        aCharge({ on: "2026-08-02", amount: 50, account: IGOR_PERSONAL }),
+        aCharge({ on: "2026-08-02", amount: 50, account: CHECKING }),
       ],
       "2026-08-01",
       "2026-08-12"
@@ -264,7 +279,7 @@ describe("reconciling against the autopay", () => {
       [
         aCharge({ on: "2026-07-01", amount: 1000 }),
         anAutopay({ on: "2026-08-09", amount: 1000 }),
-        anAutopayDebit({ on: "2026-08-09", amount: 1000, from: IGOR_PERSONAL }),
+        anAutopayDebit({ on: "2026-08-09", amount: 1000, from: CHECKING }),
       ],
       settled
     )

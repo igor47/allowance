@@ -5,13 +5,13 @@
  * past month is linkable and the back button does what it looks like it does.
  */
 
-import { HISTORY_START } from "../config"
-
 export interface MonthPickerProps {
   /** The month on display, as YYYY-MM. */
   month: string
   /** The latest month that can be asked for, as YYYY-MM. */
   latest: string
+  /** The earliest month that can be asked for, as YYYY-MM. From the config. */
+  historyStart: string
   /** The list selection, carried through so changing month keeps your view. */
   filter?: string
   who?: string
@@ -39,9 +39,16 @@ export const monthLabel = (month: string): string => {
   return `${MONTHS[Number(m) - 1]} ${year}`
 }
 
-export const MonthPicker = ({ month, latest, filter, who, action = "/" }: MonthPickerProps) => {
+export const MonthPicker = ({
+  month,
+  latest,
+  filter,
+  who,
+  historyStart,
+  action = "/",
+}: MonthPickerProps) => {
   const [year, m] = month.split("-")
-  const firstYear = Number(HISTORY_START.split("-")[0])
+  const firstYear = Number(historyStart.split("-")[0])
   const lastYear = Number(latest.split("-")[0])
   const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
 

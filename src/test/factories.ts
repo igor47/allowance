@@ -9,8 +9,8 @@
  * charges, refunds, deposits — which is what scenarios should use.
  */
 
-import { CHASE } from "../domain/policy"
 import type { LmPlaidAccount, LmRecurringItem, LmTag, LmTransaction } from "../lunchmoney/types"
+import { CARD } from "./accounts"
 
 let nextId = 1
 
@@ -82,8 +82,8 @@ export function txn(overrides: TxnOverrides = {}): LmTransaction {
     exclude_from_totals: false,
     is_pending: false,
     status: "cleared",
-    account_display_name: CHASE,
-    plaid_account_display_name: CHASE,
+    account_display_name: CARD,
+    plaid_account_display_name: CARD,
     asset_display_name: null,
     institution_name: "A Bank",
     ...overrides,
@@ -102,7 +102,7 @@ export function account(overrides: Partial<LmPlaidAccount> = {}): LmPlaidAccount
   return {
     id: anId(),
     name: "CREDIT CARD",
-    display_name: CHASE,
+    display_name: CARD,
     type: "credit",
     subtype: "credit card",
     mask: "0000",

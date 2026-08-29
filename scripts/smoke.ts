@@ -5,13 +5,14 @@
  * Read-only — it never writes a tag. Run through `mise run smoke`.
  */
 
-import { config } from "../src/config"
+import { loadConfig } from "../src/config"
 import { money } from "../src/components/format"
 import { today } from "../src/domain/dates"
 import { Cache } from "../src/lunchmoney/cache"
 import { HttpLunchMoneyClient } from "../src/lunchmoney/client"
 import { DashboardService } from "../src/services/dashboard"
 
+const config = loadConfig()
 const client = new HttpLunchMoneyClient({ apiKey: config.lunchMoneyApiKey })
 const service = new DashboardService(client, config, new Cache(0))
 const dashboard = await service.build(today(config.timezone))

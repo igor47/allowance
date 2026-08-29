@@ -15,17 +15,21 @@ import { budgetView } from "../src/domain/budget"
 import { cycleTotal, reconcile } from "../src/domain/card"
 import { cycleView } from "../src/domain/cycle"
 import { addDays, endOfMonth, startOfMonth, today as todayIn } from "../src/domain/dates"
-import { unknownAccounts } from "../src/domain/policy"
+import { statementAccount, unknownAccounts } from "../src/domain/policy"
 import { HttpLunchMoneyClient } from "../src/lunchmoney/client"
 import type { LmRecurringItem, LmTransaction } from "../src/lunchmoney/types"
-import { config } from "../src/config"
+import { loadConfig } from "../src/config"
 import { V1Client } from "./v1-client"
 
+const config = loadConfig()
 const apiKey = config.lunchMoneyApiKey
 if (!apiKey) throw new Error("LUNCHMONEY_API_KEY is not set")
 
 const today = todayIn(config.timezone)
-const cycles = cycleView(today, config.statementCloseDay, config.statementDueDay)
+const onCard = statementAccount(config.accounts)
+const card = onCard?.name ?? ""
+const statement = onCard?.statement
+const cycles = cycleView(today, statement?.closeDay ?? 1, statement?.dueDay ?? 1)
 // The same window the dashboard asks for, slack included. Without the slack a
 // charge authorized before the cycle opened but posted after it is missing, and
 // the reconciliation reads a false shortfall — which it did, by $480, the first
@@ -129,17 +133,17 @@ for (const [field, { count, example }] of differing) {
 // The end-to-end question: do the numbers on the page move?
 console.log("\nwhat the domain makes of each:\n")
 const rows = (txns: LmTransaction[]) => {
-  const classified = classifyAll(txns)
+  const classified = classifyAll(txns, config.accounts)
   const allowance = computeAllowance(classified, config.allowance, today)
-  const settled = reconcile(txns, cycles.settled, { windowStart: start })
+  const settled = reconcile(txns, cycles.settled, { account: card, windowStart: start })
   return {
     spent: allowance.spent.toFixed(2),
     balance: allowance.balance.toFixed(2),
-    "due (closed cycle)": cycleTotal(txns, cycles.lastClosed.start, cycles.lastClosed.end).charges.toFixed(2),
-    accruing: cycleTotal(txns, cycles.current.start, cycles.current.end).charges.toFixed(2),
+    "due (closed cycle)": cycleTotal(txns, cycles.lastClosed.start, cycles.lastClosed.end, card).charges.toFixed(2),
+    accruing: cycleTotal(txns, cycles.current.start, cycles.current.end, card).charges.toFixed(2),
     "reconcile delta": settled.delta === null ? "—" : settled.delta.toFixed(2),
     "needs review": String(classified.filter((c) => !c.classification.reviewed && c.classification.taggable && c.classification.bucket !== "deposit").length),
-    "unknown accounts": unknownAccounts(txns).join(",") || "none",
+    "unknown accounts": unknownAccounts(txns, config.accounts).join(",") || "none",
   }
 }
 const a = rows(oneTxns)

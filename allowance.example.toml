@@ -1,0 +1,87 @@
+# allowance — configuration.
+#
+# Copy this to `allowance.toml` (gitignored) and edit it, or point
+# ALLOWANCE_CONFIG somewhere else. Everything in here is *policy*: it is
+# long-lived, it wants comments, and the accounts table is a map of arbitrary
+# size that no environment variable could hold legibly.
+#
+# The plumbing — the API key, the port, cache timings — comes from the
+# environment instead, because it changes per deployment rather than per
+# household. See README.md for that half.
+
+
+# Dollars per day.
+daily_target = 200
+
+# The date the app began counting. A floor, not a recurring anniversary: once
+# it is past, each month restarts on the 1st.
+period_start = "2026-08-01"
+
+# Positive rollover is capped at this many days of target, applied day by day
+# so a frugal stretch cannot fund one blowout. Overspend carries forward in
+# full — a floor would make the number meaningless.
+rollover_cap_days = 14
+
+# How far back the month picker offers to go. Declared rather than derived: the
+# app cannot ask Lunch Money when the data begins without a wide query against a
+# rate limit that does not welcome one.
+history_start = "2025-01"
+
+
+# Who a spend can be attributed to.
+#
+# Person tags are orthogonal to the math — they say who spent it, never what
+# kind of spend it was — so adding someone here adds a button to every row and
+# changes no number. `tag` is what gets written back to Lunch Money; `label` is
+# what the button says. Leave the list empty and the buttons disappear.
+[[people]]
+tag = "alex"
+label = "Alex"
+
+[[people]]
+tag = "sam"
+label = "Sam"
+
+
+# The accounts, keyed by the display name Lunch Money gives them.
+#
+# The name must match exactly. An account that appears in the data but not here
+# is treated as `fixed` and surfaced on the dashboard as unknown, so the
+# omission is visible rather than silent.
+#
+# `policy` says what an *untagged* row on that account means. A tag beats it,
+# except for `ignore`, which is a fact about the account rather than a reading
+# of the row:
+#
+#   spending — discretionary by default: untagged counts against the allowance,
+#              so a row nobody has classified yet makes the number conservative
+#              rather than flattering.
+#   fixed    — rent, autopay, transfers. Only an explicit `spending` tag counts,
+#              which is how an ATM withdrawal enters the number.
+#   ignore   — dormant or irrelevant. Never counts, never shown for review, and
+#              no tag can change that.
+#
+# The one expensive mistake is marking a bank account `spending`: rent and the
+# card autopay leave from there, and counting them overstates a month by an
+# order of magnitude.
+
+[accounts."Card"]
+policy = "spending"
+# Exactly one account carries `statement` — the credit card whose cycle drives
+# the summary boxes and the reconciliation line. `close_day` is the day of the
+# month the statement closes; `due_day` is the day of the *following* month the
+# autopay debits. Both clamp on short months, so 31 lands on the 28th in
+# February.
+statement = { close_day = 12, due_day = 9 }
+
+[accounts."Wallet"]
+policy = "spending"
+
+[accounts."Checking"]
+policy = "fixed"
+
+[accounts."Savings"]
+policy = "fixed"
+
+[accounts."Old Card"]
+policy = "ignore"

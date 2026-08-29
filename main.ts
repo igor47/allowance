@@ -1,7 +1,8 @@
 import { createApp } from "./src/app"
-import { config } from "./src/config"
+import { loadConfig } from "./src/config"
 import { HttpLunchMoneyClient } from "./src/lunchmoney/client"
 
+const config = loadConfig()
 const client = new HttpLunchMoneyClient({ apiKey: config.lunchMoneyApiKey })
 const app = createApp({ client, config })
 

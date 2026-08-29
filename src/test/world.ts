@@ -13,10 +13,9 @@
  */
 
 import type { Config } from "../config"
-import { config as baseConfig } from "../config"
 import { addDays, type IsoDate } from "../domain/dates"
-import { CHASE, IGOR_PERSONAL, type KnownAccount, VENMO } from "../domain/policy"
 import type { LmPlaidAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
+import { CARD, CHECKING, TEST_ACCOUNTS, type TestAccount, WALLET } from "./accounts"
 import { account, metadata, recurringItem, type TxnOverrides, txn } from "./factories"
 
 export interface World {
@@ -29,16 +28,24 @@ export interface World {
 }
 
 /**
- * Pinned so a stray env var cannot move the numbers a scenario asserts on.
- * A round $200/day, because the real figure is nobody's business and the rule
- * reads better against a number you can do in your head.
+ * Written out in full rather than spread over the real config, so no
+ * environment variable and no file on disk can move the numbers a scenario
+ * asserts on. A round $200/day, because the rule reads better against a figure
+ * you can do in your head.
  */
 export const TEST_CONFIG: Config = {
-  ...baseConfig,
+  port: 0,
+  timezone: "America/Los_Angeles",
+  lunchMoneyApiKey: "test",
   cacheTtlSeconds: 0,
-  statementCloseDay: 12,
-  statementDueDay: 9,
+  refreshAfterMinutes: 30,
   allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
+  historyStart: "2025-01",
+  accounts: TEST_ACCOUNTS,
+  people: [
+    { tag: "alex", label: "Alex" },
+    { tag: "sam", label: "Sam" },
+  ],
 }
 
 const DEFAULT_TODAY = "2026-08-14"
@@ -70,7 +77,7 @@ export interface ChargeOptions {
   amount: number
   payee?: string
   tags?: string[]
-  account?: KnownAccount
+  account?: TestAccount
   /** When Chase posted it, if that is not the day it was made. */
   posted?: IsoDate
   category?: string
@@ -84,7 +91,7 @@ export interface ChargeOptions {
 export interface DepositOptions {
   on: IsoDate
   amount: number
-  into?: KnownAccount
+  into?: TestAccount
   payee?: string
   tags?: string[]
   category?: string
@@ -94,7 +101,7 @@ export interface DepositOptions {
 export interface SweepOptions {
   on: IsoDate
   amount: number
-  account?: KnownAccount
+  account?: TestAccount
 }
 
 export interface TransferOptions {
@@ -102,8 +109,8 @@ export interface TransferOptions {
   on: IsoDate
   /** Dollars. Positive is money leaving, as on every verb. */
   amount: number
-  from: KnownAccount
-  to: KnownAccount
+  from: TestAccount
+  to: TestAccount
   /** Days the far leg takes to land. One, as the real feeds report it. */
   settles?: number
   /**
@@ -121,7 +128,7 @@ export interface CashoutOptions {
   /** The day the wallet reports it. The bank lands it `settles` days later. */
   on: IsoDate
   amount: number
-  into?: KnownAccount
+  into?: TestAccount
   settles?: number
 }
 
@@ -142,7 +149,7 @@ export interface AutopayOptions {
    * The bank account it debits. Given, the matching outflow is added there
    * too, a day later, exactly as the real feed reports it.
    */
-  from?: KnownAccount
+  from?: TestAccount
   /** When the bank side lands, if not the day after. */
   debitedOn?: IsoDate
   /** When Chase posted the credit, if that is not the day it ran. */
@@ -189,7 +196,7 @@ export class WorldBuilder implements World {
     // The card is always there. A scenario that says nothing about accounts
     // still renders the summary boxes and reads as freshly synced, which is
     // what lets most of them be three lines long.
-    this.account(CHASE, { balance: "0", to_base: 0 })
+    this.account(CARD, { balance: "0", to_base: 0 })
   }
 
   /** Override the allowance parameters without restating the rest of the config. */
@@ -202,12 +209,12 @@ export class WorldBuilder implements World {
    * Declare an account. Called twice for the same name, the second wins —
    * so the constructor's default card can be replaced with a balance.
    */
-  account(name: KnownAccount, over: Partial<LmPlaidAccount> = {}): this {
+  account(name: TestAccount, over: Partial<LmPlaidAccount> = {}): this {
     const timings = timingsFor(this.today)
     const built = account({
       display_name: name,
       name,
-      type: name === CHASE ? "credit" : "cash",
+      type: name === CARD ? "credit" : "cash",
       balance_last_update: timings.read,
       last_import: timings.imported,
       last_fetch: timings.read,
@@ -316,7 +323,7 @@ function money(amount: number): string {
   return amount.toFixed(2)
 }
 
-function accountFields(name: KnownAccount): Partial<LmTransaction> {
+function accountFields(name: TestAccount): Partial<LmTransaction> {
   return { account_display_name: name, plaid_account_display_name: name, asset_display_name: null }
 }
 
@@ -338,7 +345,7 @@ function chargeOverrides(options: ChargeOptions, amount: number): TxnOverrides {
     category_name: options.category ?? "Shopping",
     exclude_from_totals: options.excluded ?? false,
     is_pending: options.pending ?? false,
-    ...accountFields(options.account ?? CHASE),
+    ...accountFields(options.account ?? CARD),
     // Only written when it differs, so the "posted lags the swipe" cases are
     // visible in the scenario rather than implied by a metadata blob.
     plaid_metadata: options.posted
@@ -365,7 +372,7 @@ export function aDeposit(options: DepositOptions): LmTransaction {
     category_name: options.category ?? "Income",
     is_income: true,
     exclude_from_totals: options.excluded ?? false,
-    ...accountFields(options.into ?? IGOR_PERSONAL),
+    ...accountFields(options.into ?? CHECKING),
     tags: options.tags ?? [],
   })
 }
@@ -383,7 +390,7 @@ export function anAutopay(options: AutopayOptions): LmTransaction {
     original_name: "AUTOMATIC PAYMENT - THANK YOU",
     category_name: options.category ?? "Payment, Transfer",
     is_income: options.category === "Income",
-    ...accountFields(CHASE),
+    ...accountFields(CARD),
     plaid_metadata: options.posted
       ? metadata({ posted: options.posted, authorized: options.on })
       : null,
@@ -400,10 +407,10 @@ export function anAutopayDebit(options: AutopayOptions): LmTransaction {
   return txn({
     date: options.debitedOn ?? addDays(options.on, 1),
     amount: money(options.amount),
-    payee: "DIRECT DEBIT CHASE CREDIT CAUTOPAY (Cash)",
-    original_name: "DIRECT DEBIT CHASE CREDIT CAUTOPAY",
+    payee: "DIRECT DEBIT CARD CREDIT CAUTOPAY (Cash)",
+    original_name: "DIRECT DEBIT CARD CREDIT CAUTOPAY",
     category_name: "Credit card payment",
-    ...accountFields(options.from ?? IGOR_PERSONAL),
+    ...accountFields(options.from ?? CHECKING),
   })
 }
 
@@ -422,7 +429,7 @@ export function aSweep(options: SweepOptions): LmTransaction {
         : "REDEMPTION FROM CORE ACCOUNT FDIC INSURED DEPOSIT",
     category_name: "Payment, Transfer",
     exclude_from_totals: true,
-    ...accountFields(options.account ?? IGOR_PERSONAL),
+    ...accountFields(options.account ?? CHECKING),
   })
 }
 
@@ -472,9 +479,9 @@ export function aWalletTransfer(options: SweepOptions): LmTransaction {
     date: options.on,
     amount: money(options.amount),
     payee: "Venmo",
-    original_name: "VENMO",
+    original_name: "WALLET",
     category_name: "Payment, Transfer",
-    ...accountFields(options.account ?? IGOR_PERSONAL),
+    ...accountFields(options.account ?? CHECKING),
   })
 }
 
@@ -486,7 +493,7 @@ export function aWalletTransfer(options: SweepOptions): LmTransaction {
  * as several hundred dollars of discretionary spend.
  */
 export function aWalletCashout(options: CashoutOptions): [LmTransaction, LmTransaction] {
-  const into = options.into ?? IGOR_PERSONAL
+  const into = options.into ?? CHECKING
   return [
     txn({
       date: options.on,
@@ -495,7 +502,7 @@ export function aWalletCashout(options: CashoutOptions): [LmTransaction, LmTrans
       original_name: "STANDARD TRANSFER",
       category_name: "Payment, Transfer",
       exclude_from_totals: true,
-      ...accountFields(VENMO),
+      ...accountFields(WALLET),
       institution_name: "Venmo - Personal",
     }),
     aWalletTransfer({
@@ -515,7 +522,7 @@ export function aWalletPayment(options: WalletPaymentOptions): LmTransaction {
     original_name: options.payee,
     category_name: options.category ?? "Payment, Transfer",
     exclude_from_totals: options.excluded ?? true,
-    ...accountFields(VENMO),
+    ...accountFields(WALLET),
     institution_name: "Venmo - Personal",
     tags: options.tags ?? [],
   })

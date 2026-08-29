@@ -351,7 +351,7 @@ export const FilterBar = ({
            * empty. A default that shows nothing is a bug rather than a
            * preference, and no other view is arrived at by accident.
            *
-           * Narrowing the queue afterwards still works — click Igor while
+           * Narrowing the queue afterwards still works — click a person while
            * it is showing and you get his — because that is a thing you
            * asked for rather than a thing you inherited.
            */
@@ -433,8 +433,9 @@ export const TransactionList = ({
     {/*
      * Both figures always show. Hiding "against the allowance" when it equalled
      * the total made two filters look like they were measuring different
-     * things — Igor read "$925 · $675 against the allowance" while Serena read
-     * "$879" and you had to work out whether the rest was excluded or absent.
+     * things — one filter read "$925 · $675 against the allowance" while the
+     * next read "$879", and you had to work out whether the rest was excluded
+     * or absent.
      */}
     <p class="small text-secondary mb-2">
       <span class="tabular">{summary.count}</span> transaction{summary.count === 1 ? "" : "s"}

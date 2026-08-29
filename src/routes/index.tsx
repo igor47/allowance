@@ -24,7 +24,7 @@ type Query = { req: { query(name: string): string | undefined } }
 /**
  * Which slice of the list is being asked for: what kind, and whose.
  *
- * `filter=igor` used to mean "everything of Igor's" — before the two became
+ * `filter=<person>` used to mean "everything of theirs" — before the two became
  * separate axes — and links and bookmarks to it may still exist, so a person
  * arriving on the view parameter is read as one rather than thrown away.
  */

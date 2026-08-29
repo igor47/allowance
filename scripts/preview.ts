@@ -81,7 +81,7 @@ const world = aWorld({ today: "2026-08-14" })
   // A matched pair, an autopay, and a wallet, so every bucket has a row.
   .autopay({ on: "2026-08-09", amount: 1875.44, from: CHECKING })
   .transfer({ on: "2026-08-02", amount: 2000, from: SAVINGS, to: CHECKING })
-  .walletPayment({ on: "2026-08-12", amount: 45, payee: "Serena", category: "Dining" })
+  .walletPayment({ on: "2026-08-12", amount: 45, payee: "Sam", category: "Dining" })
   .walletCashout({ on: "2026-08-07", amount: 300, into: CHECKING })
   .sweep({ on: "2026-08-05", amount: 500, account: SAVINGS })
 

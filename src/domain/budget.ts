@@ -85,7 +85,7 @@ const WEEKS_PER_MONTH = 52 / 12
 const DAYS_PER_MONTH = 365 / 12
 
 /**
- * Lunch Money returns payees HTML-escaped — "PG&amp;E", "Serena&#x27;s Gym" —
+ * Lunch Money returns payees HTML-escaped — "PG&amp;E", "Sam&#x27;s Gym" —
  * and JSX escapes again on the way out, so the entity would reach the screen
  * verbatim. Decoded here rather than in the component: it is a property of
  * their data, not of how we render it.

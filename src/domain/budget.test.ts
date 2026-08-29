@@ -139,7 +139,7 @@ describe("state", () => {
 describe("payees arrive HTML-escaped", () => {
   test("named and numeric entities both decode", () => {
     expect(decodeEntities("PG&amp;E")).toBe("PG&E")
-    expect(decodeEntities("Serena&#x27;s Gym")).toBe("Serena's Gym")
+    expect(decodeEntities("Sam&#x27;s Gym")).toBe("Sam's Gym")
     expect(decodeEntities("3-5x&#x2F;mo")).toBe("3-5x/mo")
   })
 

@@ -1,6 +1,6 @@
 import type { ClassifiedTransaction } from "../domain/allowance"
 import { STATEMENT_ACCOUNT } from "../domain/card"
-import type { Bucket } from "../domain/policy"
+import type { Bucket, TAG } from "../domain/policy"
 import { detailsOf } from "../lunchmoney/details"
 import { accountNameOf } from "../lunchmoney/types"
 import {
@@ -31,24 +31,49 @@ const FILTER_LABEL: Record<Filter, string> = {
   serena: "Serena",
 }
 
+/** Keyed off the domain's own vocabulary, so a new tag must pick a colour. */
+type TagName = keyof typeof TAG
+
+/**
+ * What each tag looks like when it is on, and what it promises on the way.
+ *
+ * The resting state stays a uniform muted outline — six lit buttons on every
+ * row would be a lot of colour for a list you scan — but hovering one shows
+ * the colour that tag will actually be, so the badge the click is about to
+ * produce is visible before the click. `preview` sets only Bootstrap's three
+ * `--bs-btn-hover-*` variables, so the rest of the outline variant is left
+ * alone; the colours themselves live in app.css beside the solid ones.
+ *
+ * Only the off state carries it. A lit button already wears its colour and
+ * has a hover of its own, which this would otherwise overwrite.
+ */
+const TAG_TONE: Record<TagName, { active: string; preview: string }> = {
+  spending: { active: "btn-primary", preview: "preview-primary" },
+  recurring: { active: "tag-teal", preview: "preview-teal" },
+  irregular: { active: "tag-purple", preview: "preview-purple" },
+  transfer: { active: "btn-secondary", preview: "preview-secondary" },
+  igor: { active: "btn-light", preview: "preview-light" },
+  serena: { active: "btn-light", preview: "preview-light" },
+}
+
 const TagButton = ({
   id,
   tag,
   label,
   active,
-  style,
   month,
 }: {
   id: number
-  tag: string
+  tag: TagName
   label: string
   active: boolean
-  style: string
   month?: string
 }) => (
   <button
     type="button"
-    class={`btn tag-btn ${active ? style : "btn-outline-secondary"}`}
+    class={`btn tag-btn ${
+      active ? TAG_TONE[tag].active : `btn-outline-secondary ${TAG_TONE[tag].preview}`
+    }`}
     hx-post={`/transactions/${id}/tag?tag=${tag}${month ? `&month=${month}` : ""}`}
     hx-target="closest tr"
     hx-swap="outerHTML"
@@ -132,7 +157,6 @@ export const TransactionRow = ({
                 tag="spending"
                 label="spend"
                 active={tags.includes("spending")}
-                style="btn-primary"
               />
               <TagButton
                 month={month}
@@ -140,7 +164,6 @@ export const TransactionRow = ({
                 tag="recurring"
                 label="recur"
                 active={tags.includes("recurring")}
-                style="tag-teal"
               />
               <TagButton
                 month={month}
@@ -148,7 +171,6 @@ export const TransactionRow = ({
                 tag="irregular"
                 label="irreg"
                 active={tags.includes("irregular")}
-                style="tag-purple"
               />
               <TagButton
                 month={month}
@@ -156,7 +178,6 @@ export const TransactionRow = ({
                 tag="transfer"
                 label="xfer"
                 active={tags.includes("transfer")}
-                style="btn-secondary"
               />
             </div>
             <div class="btn-group tag-group">
@@ -166,7 +187,6 @@ export const TransactionRow = ({
                 tag="igor"
                 label="I"
                 active={tags.includes("igor")}
-                style="btn-light"
               />
               <TagButton
                 month={month}
@@ -174,7 +194,6 @@ export const TransactionRow = ({
                 tag="serena"
                 label="S"
                 active={tags.includes("serena")}
-                style="btn-light"
               />
             </div>
           </>

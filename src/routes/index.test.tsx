@@ -659,6 +659,29 @@ describe("phone layout", () => {
     expect(labels).toEqual([null, ...headers.slice(1, 5), null])
   })
 
+  test("an unlit tag button promises the colour it will become", async () => {
+    // The badge a click produces and the hover that precedes it are the same
+    // colour, which only holds while `TAG_TONE` keeps the two in step — the
+    // active class and the preview class come from one entry each, and the map
+    // is keyed off the domain's tags so a new one cannot skip a colour.
+    const page = await dashboard(august(), "?filter=all")
+    // "A Utility" is the world's `recurring`-tagged charge.
+    const row = Array.from(page.doc.querySelectorAll("tbody tr")).find((tr) =>
+      tr.textContent?.includes("A Utility")
+    )
+    const buttons = Array.from(row?.querySelectorAll(".tag-btn") ?? []).map(
+      (b) => b.getAttribute("class") ?? ""
+    )
+    const lit = buttons.filter((c) => !c.includes("btn-outline-secondary"))
+    // The lit one wears its colour and keeps the hover that belongs to it.
+    expect(lit).toEqual([expect.stringContaining("tag-teal")])
+    expect(lit[0]).not.toContain("preview-")
+    // Every unlit one carries exactly one promise.
+    const unlit = buttons.filter((c) => c.includes("btn-outline-secondary"))
+    expect(unlit).toHaveLength(5)
+    for (const c of unlit) expect(c.match(/preview-\w+/g)).toHaveLength(1)
+  })
+
   test("the sync menu only refuses to wrap on its label rows", async () => {
     // Applying nowrap to every child stretched the queued sentence into one
     // 609px line, which is wider than the phone it opens on.

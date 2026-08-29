@@ -110,6 +110,53 @@
   --bs-btn-active-border-color: #5c37a3;
 }
 
+/*
+ * Hovering an unlit tag button shows the colour that tag will be.
+ *
+ * The resting row stays a uniform muted outline, because six lit buttons on
+ * every row would be a lot of colour for a list you scan — but that left the
+ * six looking interchangeable right up until one was pressed. These set only
+ * Bootstrap's three `--bs-btn-hover-*` variables, so the outline variant keeps
+ * its resting look and only the promise changes; the values are the same ones
+ * the solid variants above use, so a hover and the badge it produces are the
+ * same colour rather than two guesses at it.
+ *
+ * Behind `hover: hover` so a phone, where a tap leaves the hover state stuck
+ * on the button it just fired, never shows a preview of something that has
+ * already happened.
+ */
+@media (hover: hover) {
+  .tag-btn.preview-primary:hover {
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+  }
+
+  .tag-btn.preview-teal:hover {
+    --bs-btn-hover-color: #000;
+    --bs-btn-hover-bg: var(--bs-teal);
+    --bs-btn-hover-border-color: var(--bs-teal);
+  }
+
+  .tag-btn.preview-purple:hover {
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--bs-purple);
+    --bs-btn-hover-border-color: var(--bs-purple);
+  }
+
+  .tag-btn.preview-secondary:hover {
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--bs-secondary);
+    --bs-btn-hover-border-color: var(--bs-secondary);
+  }
+
+  .tag-btn.preview-light:hover {
+    --bs-btn-hover-color: #000;
+    --bs-btn-hover-bg: var(--bs-light);
+    --bs-btn-hover-border-color: var(--bs-light);
+  }
+}
+
 .htmx-request .tag-group {
   opacity: 0.4;
 }

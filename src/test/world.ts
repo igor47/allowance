@@ -79,7 +79,7 @@ export interface ChargeOptions {
   payee?: string
   tags?: string[]
   account?: TestAccount
-  /** When Chase posted it, if that is not the day it was made. */
+  /** When the bank posted it, if that is not the day it was made. */
   posted?: IsoDate
   category?: string
   /** Lunch Money's `exclude_from_totals`. */
@@ -153,7 +153,7 @@ export interface AutopayOptions {
   from?: TestAccount
   /** When the bank side lands, if not the day after. */
   debitedOn?: IsoDate
-  /** When Chase posted the credit, if that is not the day it ran. */
+  /** When the bank posted the credit, if that is not the day it ran. */
   posted?: IsoDate
   /**
    * Lunch Money's category. Worth overriding: it files some autopays under
@@ -266,7 +266,7 @@ export class WorldBuilder implements World {
     return this
   }
 
-  /** Fidelity's internal half, swept in or out of the core cash position. */
+  /** The bank's internal half, swept in or out of a core cash position. */
   sweep(options: SweepOptions): this {
     this.transactions.push(aSweep(options))
     return this
@@ -416,7 +416,7 @@ export function anAutopayDebit(options: AutopayOptions): LmTransaction {
 }
 
 /**
- * Fidelity's internal half: cash swept in or out of the core position on every
+ * The bank's internal half: cash swept in or out of a core position on every
  * real movement. Categorised and excluded exactly like a genuine deposit,
  * which is why only the payee separates them.
  */

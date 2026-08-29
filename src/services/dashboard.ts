@@ -52,7 +52,7 @@ export interface Dashboard {
   now: Date
 }
 
-/** Chase posts a charge up to four days after it is authorized. */
+/** A card can post a charge up to four days after it is authorized. */
 const POSTING_SLACK_DAYS = 5
 
 export class DashboardService {

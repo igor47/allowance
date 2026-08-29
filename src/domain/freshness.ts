@@ -16,7 +16,7 @@ export interface Freshness {
    * This only moves when Plaid actually had something new to hand over. A
    * refresh that finds nothing leaves it untouched, which is why it can sit at
    * "18h ago" while balances update — balances are re-read every time, whereas
-   * an import needs Chase to have posted something.
+   * an import needs a bank to have posted something.
    */
   transactionsAt: Date | null
   /** Date of the newest transaction held, which is what people actually mean. */

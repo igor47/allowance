@@ -72,7 +72,7 @@ describe("cycle totals", () => {
   })
 
   test("a charge is billed in the cycle it posts to, not the one it is made in", () => {
-    // Swiped on the close date, posted the day after: Chase puts it on the
+    // Swiped on the close date, posted the day after: the issuer puts it on the
     // following statement.
     const late = aCharge({ on: "2026-07-12", amount: 100, posted: "2026-07-13" })
     expect(cycleTotal([late], "2026-06-13", "2026-07-12").charges).toBe(0)
@@ -81,7 +81,7 @@ describe("cycle totals", () => {
 })
 
 /**
- * The app checking its own arithmetic against Chase.
+ * The app checking its own arithmetic against the issuer.
  *
  * Every scenario here is one statement and the autopay that settled it, which
  * is the whole of the invariant: what we say was billed, plus whatever credit
@@ -132,7 +132,7 @@ describe("reconciling against the autopay", () => {
   })
 
   test("a credit inside the cycle is already in the bill, and is not counted twice", () => {
-    // Chase nets a credit posted before the close out of that statement's own
+    // The issuer nets a credit posted before the close out of that statement's own
     // balance, so it must not also be subtracted from the payment.
     const result = reconcile(
       [

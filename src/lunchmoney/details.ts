@@ -3,7 +3,7 @@
  * as a first-class field. It arrives as a JSON string in `plaid_metadata`.
  *
  * The important one is the posted date. Lunch Money's `date` is Plaid's
- * *authorized* date — when the card was swiped — while Chase bills on the date
+ * *authorized* date — when the card was swiped — while the issuer bills on the date
  * the charge *posts*, usually one or two days later. Using the posted date for
  * statement cycles reconciles them exactly.
  */
@@ -11,7 +11,7 @@
 import type { LmTransaction } from "./types"
 
 export interface TransactionDetails {
-  /** When Chase posted it. Falls back to the Lunch Money date. */
+  /** When the bank posted it. Falls back to the Lunch Money date. */
   posted: string
   /** When the card was actually used. */
   authorized: string | null
@@ -82,7 +82,7 @@ export function detailsOf(txn: LmTransaction): TransactionDetails {
 }
 
 /**
- * The date Chase bills on. Statement cycles use this; the daily allowance does
+ * The date the issuer bills on. Statement cycles use this; the daily allowance does
  * not — money is spent the day you spend it, not the day the bank agrees.
  */
 export function postedDate(txn: LmTransaction): string {

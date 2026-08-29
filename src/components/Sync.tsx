@@ -117,7 +117,7 @@ export const Sync = ({ dashboard, state: action = "idle" }: SyncProps) => {
 
         {queued ? (
           <div class="text-info mt-2">
-            Queued. Nothing new appears until Chase posts it, which takes a day or two.
+            Queued. Nothing new appears until the bank posts it, which takes a day or two.
           </div>
         ) : null}
         {action === "reloaded" ? (

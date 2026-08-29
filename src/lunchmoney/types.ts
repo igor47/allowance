@@ -22,7 +22,7 @@ export interface LmTransaction {
   exclude_from_totals: boolean
   is_pending: boolean
   status: string
-  /** Display name of the owning account, e.g. "Card". */
+  /** Display name of the owning account — the key `[accounts]` matches on. */
   account_display_name: string | null
   plaid_account_display_name: string | null
   asset_display_name: string | null

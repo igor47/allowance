@@ -334,10 +334,10 @@
  *
  *   8/11 ↳ 8/12   [spending]              $246.18
  *   A Grocery Cooperative
- *   A GROCERY COOP 1745 FOLSOM ST SAN F…
+ *   A GROCERY COOP 1745 EXAMPLE ST SAN F…
  *   Groceries
- *   [Card] untagged on Card
- *   [ spend ][ recur ][ irreg ][ xfer ]  [ I ][ S ]
+ *   [Wallet] untagged on Wallet
+ *   [ spend ][ recur ][ irreg ][ xfer ]  [ A ][ S ]
  *
  * The bucket rides on the header line with the date, being metadata of the
  * same kind, which leaves the whole width to the buttons — and the whole width

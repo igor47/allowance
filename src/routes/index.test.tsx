@@ -304,7 +304,7 @@ describe("the statement check", () => {
       .charge({ on: "2026-06-20", amount: billed, payee: "An Earlier Charge" })
       .autopay({ on: "2026-08-09", amount: paid, from: CHECKING })
 
-  test("says nothing when the reconstruction matches what Chase debited", async () => {
+  test("says nothing when the reconstruction matches what the autopay debited", async () => {
     const page = await dashboard(withASettledStatement(1_000, 1_000))
     expect(page.banners).toEqual([])
   })

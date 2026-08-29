@@ -3,7 +3,7 @@ import { cents, longDate, money, shortDate } from "./format"
 import { MonthChart } from "./MonthChart"
 
 /**
- * The app checking its own arithmetic against Chase, and saying so only when
+ * The app checking its own arithmetic against the issuer, and saying so only when
  * it disagrees.
  *
  * Silence is the normal state and is itself the reassurance: the statement

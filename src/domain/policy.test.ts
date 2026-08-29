@@ -427,7 +427,7 @@ describe("transfers between accounts we own", () => {
   })
 
   test("opposite rows within one account are not a transfer", () => {
-    // Fidelity's core sweep is equal, opposite and filed as a transfer, but it
+    // A core sweep is equal, opposite and filed as a transfer, but it
     // goes nowhere. Only the two-account rule separates it from a real move.
     const rows = aTransfer({
       on: "2026-08-10",

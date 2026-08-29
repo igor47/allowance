@@ -24,7 +24,7 @@ export function tag(name: string): LmTag {
 }
 
 export interface MetadataOptions {
-  /** The date Chase posted it, which is what statement cycles bucket on. */
+  /** The date the bank posted it, which is what statement cycles bucket on. */
   posted?: string
   authorized?: string
   /** The descriptor as it appears on the statement. */

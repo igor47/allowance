@@ -42,7 +42,7 @@ const { reconciliation: rec } = card.settled
 console.log(`\nstatement ${card.settled.start}..${card.settled.end}, settled ${rec.paidOn ?? "—"}\n`)
 line("We reconstructed", money(rec.billed))
 if (rec.creditsAfterClose !== 0) line("Credits since close", money(rec.creditsAfterClose))
-line("Chase debited", rec.paid === null ? "not yet" : money(rec.paid))
+line("Autopay debited", rec.paid === null ? "not yet" : money(rec.paid))
 if (rec.delta !== null) line("Difference", `${rec.agrees ? "" : "! "}${money(rec.delta)}`)
 
 console.log(`\nreview\n`)

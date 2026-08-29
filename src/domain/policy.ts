@@ -118,7 +118,7 @@ export type Bucket =
   | "unclassified"
   /**
    * Money moving between places we own — the card autopay, a wallet cashout, a
-   * bank-to-bank move, Fidelity's core sweep. Never a spend on either leg, but
+   * bank-to-bank move, a brokerage's core sweep. Never a spend on either leg, but
    * taggable, because a match can be wrong and a human has to be able to say so.
    */
   | "transfer"
@@ -173,15 +173,20 @@ const TRANSFER = (reason: string, amount: number, reviewed = false): Classificat
 })
 
 /**
- * Fidelity keeps cash in a money-market position and sweeps it in and out on
- * every movement, so each real transaction arrives paired with an internal
- * sweep. Both halves come through categorised "Payment, Transfer" and flagged
- * `exclude_from_totals`, which makes those two signals useless for telling a
- * genuine deposit from bookkeeping — a work reimbursement arriving as
- * "DIRECT DEPOSIT <employer> ..." is indistinguishable from its own sweep by
- * category alone.
+ * Bookkeeping rows a bank generates against itself.
  *
- * The payee is what separates them. These patterns are the internal half.
+ * A brokerage cash account keeps its balance in a money-market position and
+ * sweeps it in and out on every movement, so each real transaction arrives
+ * paired with an internal sweep. Both halves come through categorised
+ * "Payment, Transfer" and flagged `exclude_from_totals`, which makes those two
+ * signals useless for telling a genuine deposit from bookkeeping — a work
+ * reimbursement arriving as "DIRECT DEPOSIT <employer> ..." is
+ * indistinguishable from its own sweep by category alone.
+ *
+ * The payee is what separates them. These patterns are the internal half, and
+ * they are the one place in this file that names particular institutions: they
+ * were read off a real feed, and a household whose bank spells its sweeps
+ * differently will need to add to them.
  */
 const INTERNAL_TRANSFER = /redemption from core|purchase into core|transferred from vs|acctverify/i
 
@@ -266,9 +271,9 @@ const gap = (a: string, b: string): number => daysBetween(a < b ? a : b, a < b ?
  * one ambiguous pair correctly skipped. Widening the window to five days is
  * where it starts matching unrelated cent-sized rows to each other.
  *
- * Amounts must agree exactly, so a transfer that charges a fee — Venmo's
- * instant option takes about 1.75% — has no match and falls through to the
- * rules above. That is the intended failure: wrong small, and visible.
+ * Amounts must agree exactly, so a transfer that charges a fee — an instant
+ * cashout typically takes 1–2% — has no match and falls through to the rules
+ * above. That is the intended failure: wrong small, and visible.
  *
  * One leg must also read as a transfer to `looksLikeTransfer()`. Structure
  * alone was not enough: a $300 restaurant charge and a $300 cheque three days
@@ -380,9 +385,9 @@ export function classify(
   if (isInternalTransfer(txn)) return TRANSFER("internal account sweep", amount)
 
   if (policy === "fixed") {
-    // `exclude_from_totals` is not consulted here: Fidelity's double entry sets
-    // it on real deposits as well as their sweeps, so it hides the very
-    // transactions a reimbursement needs.
+    // `exclude_from_totals` is not consulted here: a sweeping account's double
+    // entry sets it on real deposits as well as on the sweeps, so it hides the
+    // very transactions a reimbursement needs.
     if (CARD_PAYMENT.test(`${txn.payee ?? ""} ${txn.original_name ?? ""}`))
       return TRANSFER("credit card payment", amount)
     if (amount < 0)

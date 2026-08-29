@@ -658,7 +658,7 @@ describe("phone layout", () => {
     // Every line in the description cell is one line, so a long descriptor
     // ends in an ellipsis. The `title` is what makes that reversible, and it
     // is only worth having on the lines that can actually lose text.
-    const long = "A GROCERY COOP 1745 FOLSOM ST SAN FRANCISCO CA 94103"
+    const long = "A GROCERY COOP 1745 EXAMPLE ST SAN FRANCISCO CA 94103"
     const page = await dashboard(
       august().charge({
         on: "2026-08-13",
@@ -670,11 +670,9 @@ describe("phone layout", () => {
       "?filter=all"
     )
     const row = Array.from(page.doc.querySelectorAll("tbody tr")).find((tr) =>
-      tr.textContent?.includes("Rainbow")
+      tr.textContent?.includes("Grocery")
     )
-    expect(row?.querySelector(".fw-medium")?.getAttribute("title")).toBe(
-      "A Grocery Cooperative"
-    )
+    expect(row?.querySelector(".fw-medium")?.getAttribute("title")).toBe("A Grocery Cooperative")
     const lines = Array.from(row?.querySelectorAll(".txn-line") ?? [])
     expect(lines[0]?.getAttribute("title")).toBe(long)
     expect(lines[1]?.getAttribute("title")).toBe("Groceries")

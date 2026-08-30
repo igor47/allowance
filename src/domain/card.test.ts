@@ -195,6 +195,32 @@ describe("reconciling against the autopay", () => {
     expect(result.agrees).toBe(true)
   })
 
+  test("a long grace period does not swallow the previous statement's payment", () => {
+    /*
+     * `due_day` is a day of the *following* month, so a card closing on the
+     * 5th and debiting on the 10th has a 36-day grace — longer than the gap
+     * between two payments. The window used to open at the close and run to
+     * the due date, which on this card spanned both autopays and summed two
+     * statements into one, reporting a discrepancy the size of a month's bill.
+     */
+    const longGrace = cycleView("2026-08-30", 5, 10).settled
+    expect(longGrace).toEqual({ start: "2026-06-06", end: "2026-07-05", due: "2026-08-10" })
+
+    const result = reconcile(
+      [
+        aCharge({ on: "2026-06-20", amount: 690 }),
+        // The previous statement's autopay, inside the old window and not this
+        // statement's business.
+        anAutopay({ on: "2026-07-10", amount: 17 }),
+        anAutopay({ on: "2026-08-10", amount: 690 }),
+      ],
+      longGrace
+    )
+    expect(result.paid).toBe(690)
+    expect(result.paidOn).toBe("2026-08-10")
+    expect(result.agrees).toBe(true)
+  })
+
   test("a credit landing before the debit explains the smaller payment", () => {
     // The real case, and the reason this is not simply `net`: a refund posted
     // after the statement closed reduces the autopay by exactly its amount,

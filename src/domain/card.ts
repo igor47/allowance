@@ -21,7 +21,7 @@ import { postedDate } from "../lunchmoney/details"
 import type { LmTransaction } from "../lunchmoney/types"
 import { accountNameOf } from "../lunchmoney/types"
 import type { Cycle } from "./cycle"
-import { addDays, type IsoDate } from "./dates"
+import { addDays, addMonths, type IsoDate } from "./dates"
 import { isCardPayment, type TransferCategories, type TransferIndex } from "./policy"
 
 export interface CycleTotal {
@@ -197,13 +197,32 @@ export function reconcile(
     if (earliest === null || earliest > cycle.start) return unchecked
   }
 
-  // The payment window opens the day after the close and runs a little past
-  // the due date. It cannot catch a neighbouring cycle's payment: those are a
-  // month apart and this window is under a week.
+  /*
+   * The window this statement's payment must fall in.
+   *
+   * It runs a little past the due date, and opens at whichever is later of the
+   * close and a month before the due date. That second bound is the one that
+   * matters, and the comment here used to deny it was needed: it claimed a
+   * neighbouring cycle's payment could not be caught, "because those are a
+   * month apart and this window is under a week".
+   *
+   * The window is only under a week when the grace period is. `[accounts]`
+   * spells `due_day` as a day of the *following* month, so a card closing on
+   * the 5th and debiting on the 10th has a 36-day grace — and then the window
+   * opened on the 5th and swallowed the previous statement's payment on the
+   * 10th as well as its own. Two statements were summed and reported as one,
+   * which reads as a discrepancy the size of a whole month's bill. A demo card
+   * configured exactly that way is how this surfaced.
+   *
+   * Cycles are monthly, so a payment more than a month before this statement's
+   * due date settled the statement before it, whatever the grace period.
+   */
   const windowEnd = addDays(cycle.due, PAYMENT_SLACK_DAYS)
+  const previousDue = addMonths(cycle.due, -1)
+  const windowStart = cycle.end > previousDue ? cycle.end : previousDue
   const payments = onCard.filter((t) => {
     const posted = postedDate(t)
-    if (posted <= cycle.end || posted > windowEnd) return false
+    if (posted <= windowStart || posted > windowEnd) return false
     return isCardPayment(t, categories) || !!transfers?.has(t.id)
   })
 

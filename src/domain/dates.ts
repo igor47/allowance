@@ -18,6 +18,15 @@ export function addDays(date: IsoDate, days: number): IsoDate {
   return format(parse(date).plus({ days }))
 }
 
+/**
+ * Luxon clamps a short month, so a month before the 31st of March is the 28th
+ * of February rather than a rolled-over date in March — the same clamping the
+ * statement days already rely on.
+ */
+export function addMonths(date: IsoDate, months: number): IsoDate {
+  return format(parse(date).plus({ months }))
+}
+
 /** Inclusive count: daysBetween("2026-08-01", "2026-08-01") === 1 */
 export function daysBetween(start: IsoDate, end: IsoDate): number {
   return Math.floor(parse(end).diff(parse(start), "days").days) + 1

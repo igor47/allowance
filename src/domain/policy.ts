@@ -158,6 +158,21 @@ export interface Classification {
   amount: number
   /** Why, in a few words — rendered in the UI so the math is never a mystery. */
   reason: string
+  /**
+   * True when `reason` says nothing the bucket and the tags do not already.
+   *
+   * "tagged spending" and "untagged on Penny's Visa Card" are restatements: a
+   * reader who can see the bucket, whether it was inferred, and which account
+   * the row is on has already been told. Every other reason names evidence
+   * from outside the row — a matched partner and its date, a category rule,
+   * Lunch Money's own recurring link, an exclude flag overridden — and is
+   * worth the line it costs.
+   *
+   * The domain decides this rather than the view, because which branch fired
+   * is domain knowledge; a view that matched on the strings would break the
+   * next time one is reworded.
+   */
+  restated: boolean
 }
 
 const IGNORED = (reason: string, amount: number): Classification => ({
@@ -167,6 +182,9 @@ const IGNORED = (reason: string, amount: number): Classification => ({
   taggable: false,
   amount,
   reason,
+  // "not tracked" and "zero amount" are the two ways to land here and the
+  // pill cannot say which, so both are worth printing.
+  restated: false,
 })
 
 /**
@@ -181,6 +199,9 @@ const TRANSFER = (reason: string, amount: number, reviewed = false): Classificat
   taggable: true,
   amount,
   reason,
+  // A matched pair names its counterpart and a sweep names the rule that
+  // caught it; only the hand-tagged case restates the pill.
+  restated: reviewed,
 })
 
 /**
@@ -404,6 +425,7 @@ export function classify(
       taggable: true,
       amount,
       reason: "tagged recurring",
+      restated: true,
     }
   if (tags.includes(TAG.irregular))
     return {
@@ -413,6 +435,7 @@ export function classify(
       taggable: true,
       amount,
       reason: "tagged irregular",
+      restated: true,
     }
   if (tags.includes(TAG.transfer)) return TRANSFER("tagged transfer", amount, true)
   if (tags.includes(TAG.spending))
@@ -423,6 +446,7 @@ export function classify(
       taggable: true,
       amount,
       reason: "tagged spending",
+      restated: true,
     }
 
   // Below here everything is a guess about a payee, so an explicit tag wins.
@@ -456,6 +480,7 @@ export function classify(
       taggable: true,
       amount,
       reason: "Lunch Money links this to a recurring item",
+      restated: false,
     }
   }
 
@@ -474,6 +499,7 @@ export function classify(
         taggable: true,
         amount,
         reason: "deposit — tag it `spending` if it reimburses one",
+        restated: false,
       }
     return {
       bucket: "unclassified",
@@ -481,7 +507,16 @@ export function classify(
       reviewed: false,
       taggable: true,
       amount,
-      reason: "not counted — `spending` to include it, `recurring` to stop asking",
+      /*
+       * The hint names no single tag on purpose. This bucket is "nobody has
+       * said", on an account where nothing counts by default, and it collects
+       * things that want different answers: rent is `recurring`, a vet bill is
+       * `irregular`, and money sent to a wallet is `transfer`. Naming
+       * `recurring` alone was wrong advice on two of the three, and the row
+       * with the buttons on it can say which better than this line can.
+       */
+      reason: "not counted — `spending` to include it, or classify it to stop asking",
+      restated: false,
     }
   }
 
@@ -505,6 +540,8 @@ export function classify(
       taggable: true,
       amount,
       reason: txn.exclude_from_totals ? "refund — Lunch Money excludes it, counted here" : "refund",
+      // A bare "refund" restates the green credit beside it; the override does not.
+      restated: !txn.exclude_from_totals,
     }
   }
   return {
@@ -516,6 +553,9 @@ export function classify(
     reason: txn.exclude_from_totals
       ? `counted despite Lunch Money excluding it (${txn.category_name ?? "no category"})`
       : `untagged on ${account}`,
+    // The bare case is the one this whole flag exists for: an outlined pill
+    // and an account badge have already said "untagged, on that card".
+    restated: !txn.exclude_from_totals,
   }
 }
 

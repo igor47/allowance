@@ -33,6 +33,8 @@ export interface Row {
   facts: string
   /** Why it was classified the way it was. */
   reason: string
+  /** True when the bucket pill is outlined: the app inferred it, nobody said so. */
+  inferred: boolean
   /** As rendered, to the cent. */
   amount: string
   badge: string
@@ -58,6 +60,9 @@ function rowOf(tr: Element): Row {
     descriptor: text(lines[0]),
     facts: text(lines[1]),
     reason: text(tr.querySelector(".txn-line .fst-italic")),
+    inferred: ((cells[3]?.querySelector(".badge")?.getAttribute("class") ?? "") as string).includes(
+      "inferred"
+    ),
     amount: text(cells[2]),
     badge: text(cells[3]?.querySelector(".badge")),
     account: chip ? text(chip) : "",

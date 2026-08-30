@@ -98,11 +98,31 @@ describe("dashboard", () => {
       "spending",
       "deposit",
     ])
-    expect(rows[1]?.reason).toBe("tagged recurring")
-    expect(rows[3]?.reason).toBe(`untagged on ${CARD}`)
-    // The account chip appears only for accounts other than the card.
+    // A verdict somebody tagged is solid; one the app worked out is outlined.
+    expect(rows[1]?.inferred).toBe(false)
+    expect(rows[3]?.inferred).toBe(true)
+    // Neither prints a reason: the pill and the account chip have said it.
+    expect(rows[1]?.reason).toBe("")
+    expect(rows[3]?.reason).toBe("")
+    // Every row names its account, including the statement card's own.
     expect(rows[0]?.account).toBe(CHECKING)
-    expect(rows[3]?.account).toBe("")
+    expect(rows[3]?.account).toBe(CARD)
+  })
+
+  test("a reason that names evidence is still printed", async () => {
+    // The restated ones go; the ones that point at something outside the row
+    // stay, because no arrangement of pills can say which account the other
+    // half of a movement landed on.
+    const page = await dashboard(
+      august().transfer({ on: "2026-08-11", amount: 300, from: CHECKING, to: SAVINGS }),
+      "?filter=all"
+    )
+    const legs = page.rows.filter((r) => r.badge === "transfer")
+    expect(legs).toHaveLength(2)
+    // Each leg names the other, which is exactly the fact a pill cannot carry.
+    expect(legs.map((l) => l.reason).join(" ")).toContain(CHECKING)
+    expect(legs.map((l) => l.reason).join(" ")).toContain(SAVINGS)
+    expect(legs.every((l) => l.inferred)).toBe(true)
   })
 
   test("the statement total includes charges that posted after the cycle opened", async () => {
@@ -189,8 +209,10 @@ describe("tagging", () => {
 
     expect(result.status).toBe(200)
     expect(session.client.writes).toEqual([{ transactionId: id, tags: ["recurring"] }])
-    expect(result.row?.reason).toBe("tagged recurring")
     expect(result.row?.badge).toBe("recurring")
+    // Solid now: a person said so, which is the whole difference the outline
+    // exists to show.
+    expect(result.row?.inferred).toBe(false)
     // The row comes back, and the summary is swapped out of band alongside it.
     expect(result.swapsOutOfBand).toEqual(["review-count", "allowance", "boxes"])
     // Including the review badge: the queue is one shorter than it was, and
@@ -263,7 +285,11 @@ describe("tagging", () => {
     expect(after?.payee).toBe(before?.payee)
     expect(after?.amount).toBe(before?.amount)
     expect(after?.taggable).toBe(before?.taggable)
-    expect(after?.reason).not.toBe(before?.reason)
+    // What changes is the pill, not the row's shape: neither state prints a
+    // reason, so the meta lines cannot reflow under the cursor mid-triage.
+    expect(before?.inferred).toBe(true)
+    expect(after?.inferred).toBe(false)
+    expect(after?.reason).toBe(before?.reason)
   })
 })
 
@@ -435,7 +461,8 @@ describe("caching", () => {
 
     // ...and the new tag is visible without going back to the API.
     const page = await session.dashboard("?filter=spending")
-    expect(page.row(id)?.reason).toBe("tagged spending")
+    expect(page.row(id)?.badge).toBe("spending")
+    expect(page.row(id)?.inferred).toBe(false)
     expect(session.client.reads).toBe(readsBefore)
   })
 })
@@ -691,9 +718,9 @@ describe("phone layout", () => {
     const lines = Array.from(row?.querySelectorAll(".txn-line") ?? [])
     expect(lines[0]?.getAttribute("title")).toBe(long)
     expect(lines[1]?.getAttribute("title")).toBe("Groceries")
-    expect(row?.querySelector(".txn-line .fst-italic")?.getAttribute("title")).toBe(
-      `untagged on ${CARD}`
-    )
+    // The reason is not printed on a row this ordinary, but the line still
+    // carries it, so the explanation is a hover away rather than gone.
+    expect(lines[2]?.getAttribute("title")).toBe(`untagged on ${CARD}`)
     // A line with nothing in it collapses on a phone, so it must stay empty —
     // a stray whitespace node from the markup would defeat `.txn-line:empty`.
     const bare = Array.from(page.doc.querySelectorAll(".txn-line")).find(

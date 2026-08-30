@@ -111,6 +111,55 @@
 }
 
 /*
+ * An inferred verdict, outlined rather than filled.
+ *
+ * A row carries two facts — what the money was, and whether a person said so
+ * — and the second used to be legible only from the reason text spelling out
+ * "tagged spending". Outlining the pill puts both on one element: filled means
+ * somebody tagged it, dashed-and-hollow means the app worked it out and could
+ * be wrong. Dashed rather than solid because a solid hairline reads as a
+ * design flourish at this size, where a dashed one reads as provisional.
+ *
+ * The colours are Bootstrap's: an inferred pill wears `bg-transparent`, a
+ * `text-*-emphasis` utility and a `border-*` one, so each bucket keeps the hue
+ * of the fill it would otherwise have. That also sidesteps a trap — the
+ * `text-bg-*` utilities set `color` with `!important`, so the first version of
+ * this, which kept `text-bg-primary` on the pill and tried to restyle it, lost
+ * every colour to white. An inferred pill simply does not wear `text-bg-*`.
+ *
+ * Only two things are left here, because Bootstrap has neither: the dashed
+ * border itself, and ink for the two buckets whose fills are palette colours
+ * rather than theme colours, so no `-emphasis` token exists for them.
+ *
+ * The width and style are set here rather than by adding Bootstrap's `.border`
+ * utility, which is a shorthand marked `!important` and would quietly restore
+ * a solid edge. The `border-*` colour utilities set only `border-color`, so
+ * they compose with this instead of fighting it.
+ */
+.badge.inferred {
+  border-style: dashed;
+  border-width: 1px;
+  /* The filled variants pad against a solid block; an outline needs a border
+     box the same size or the two sit at different heights in one column. */
+  padding: calc(0.35em - 1px) calc(0.65em - 1px);
+}
+
+.badge.tag-teal-outline {
+  color: var(--bs-teal);
+  border-color: var(--bs-teal);
+}
+
+/* `--bs-purple` is ink-dark against a dark ground where `--bs-teal` is not, so
+   this is the one hue mixed rather than used neat — from the variable, so it
+   still follows if the palette moves. */
+.badge.tag-purple-outline {
+  color: color-mix(in srgb, var(--bs-purple) 60%, #fff);
+  border-color: color-mix(in srgb, var(--bs-purple) 60%, #fff);
+}
+
+
+
+/*
  * Hovering an unlit tag button shows the colour that tag will be.
  *
  * The resting row stays a uniform muted outline, because six lit buttons on

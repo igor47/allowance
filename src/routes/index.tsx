@@ -135,7 +135,6 @@ dashboardRoutes.get("/", async (c) => {
         sel={sel}
         needsReview={dashboard.needsReview}
         summary={summarise(entries)}
-        card={dashboard.card.account}
         people={c.var.config.people}
       />
     </Layout>
@@ -220,7 +219,6 @@ dashboardRoutes.get("/transactions", async (c) => {
       sel={sel}
       needsReview={dashboard.needsReview}
       summary={summarise(entries)}
-      card={dashboard.card.account}
       people={c.var.config.people}
     />
   )
@@ -260,7 +258,6 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
       <TransactionRow
         entry={updated}
         month={view.isCurrent ? undefined : view.month}
-        card={after.card.account}
         people={c.var.config.people}
       />
       {/*

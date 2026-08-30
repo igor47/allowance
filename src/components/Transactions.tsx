@@ -6,14 +6,50 @@ import { accountNameOf } from "../lunchmoney/types"
 import { type FilterSummary, needsReview as isReviewItem, type View } from "../services/dashboard"
 import { cents, money, shortDate } from "./format"
 
-const BUCKET_STYLE: Record<Bucket, { label: string; class: string }> = {
-  spending: { label: "spending", class: "text-bg-primary" },
-  recurring: { label: "recurring", class: "tag-teal" },
-  irregular: { label: "irregular", class: "tag-purple" },
-  unclassified: { label: "unclassified", class: "text-bg-dark border border-secondary" },
-  deposit: { label: "deposit", class: "text-bg-success" },
-  transfer: { label: "transfer", class: "text-bg-secondary" },
-  ignored: { label: "ignored", class: "text-bg-dark border border-secondary" },
+/*
+ * Each bucket twice: filled when a person said so, outlined when the app
+ * worked it out. See `.badge.inferred` in app.css for why an inferred pill
+ * drops `text-bg-*` entirely rather than restyling it.
+ */
+const BUCKET_STYLE: Record<Bucket, { label: string; solid: string; inferred: string }> = {
+  spending: {
+    label: "spending",
+    solid: "text-bg-primary",
+    inferred: "bg-transparent text-primary-emphasis border-primary",
+  },
+  recurring: {
+    label: "recurring",
+    solid: "tag-teal",
+    inferred: "bg-transparent tag-teal-outline",
+  },
+  irregular: {
+    label: "irregular",
+    solid: "tag-purple",
+    inferred: "bg-transparent tag-purple-outline",
+  },
+  // Never filled: nobody has said anything, which is what the bucket means.
+  unclassified: {
+    label: "unclassified",
+    solid: "text-bg-dark border border-secondary",
+    inferred: "bg-transparent text-body-secondary border-dark-subtle",
+  },
+  deposit: {
+    label: "deposit",
+    solid: "text-bg-success",
+    inferred: "bg-transparent text-success-emphasis border-success",
+  },
+  transfer: {
+    label: "transfer",
+    solid: "text-bg-secondary",
+    inferred: "bg-transparent text-secondary-emphasis border-secondary",
+  },
+  // Structural, and never taggable — the outline is honest all the same, since
+  // no person classified it either.
+  ignored: {
+    label: "ignored",
+    solid: "text-bg-dark border border-secondary",
+    inferred: "bg-transparent text-body-secondary border-dark-subtle",
+  },
 }
 
 const VIEW_LABEL: Record<View, string> = {
@@ -101,25 +137,28 @@ const TagButton = ({
 export const TransactionRow = ({
   entry,
   month,
-  card,
   people,
 }: {
   entry: ClassifiedTransaction
   month?: string
   /** Who a row can be attributed to. Empty for a household of one. */
   people: Person[]
-  /**
-   * The statement card's display name. Rows on it are the common case and get
-   * no badge; everything else is worth naming. Absent when no card is
-   * configured, in which case every row is named.
-   */
-  card?: string
 }) => {
   const { txn, classification } = entry
   const tags = txn.tags.map((t) => t.name.toLowerCase())
   const account = accountNameOf(txn)
   const details = detailsOf(txn)
   const style = BUCKET_STYLE[classification.bucket]
+  /*
+   * An inferred verdict is outlined; one a person tagged is solid.
+   *
+   * The row carries two independent facts — what it is, and whether anyone
+   * said so — and they used to live in three places: the pill, the warning
+   * stripe, and the reason text spelling out "tagged spending". Putting the
+   * second fact on the same element as the first means one glance answers
+   * both, and it is what lets the restating reasons go.
+   */
+  const pill = classification.reviewed ? `badge ${style.solid}` : `badge inferred ${style.inferred}`
   const taggable = classification.taggable
   const credit = classification.amount < 0
   const classes = [
@@ -175,21 +214,30 @@ export const TransactionRow = ({
         <div class="txn-line small text-secondary" title={facts.join(" · ")}>
           {facts.join(" · ")}
         </div>
-        <div class="txn-line small">
-          {account !== card ? (
-            <span class="badge text-bg-dark border border-secondary me-1">{account}</span>
-          ) : null}
+        {/*
+          The account is named on every row. It used to be suppressed on the
+          statement card, on the reasoning that rows there are the common case
+          — true of a household with one card, and misleading with two, where
+          it made two identical kinds of row look different for a reason
+          nothing on screen explained.
+
+          This line keeps its height whatever it holds: the badge is always
+          here, and `title` still carries the full reason even when the row
+          does not print it, so nothing is lost to the reader who asks.
+        */}
+        <div class="txn-line small" title={classification.reason}>
+          <span class="badge text-bg-dark border border-secondary me-1">{account}</span>
           {txn.is_pending ? <span class="badge text-bg-warning me-1">pending</span> : null}
-          <span class="text-secondary fst-italic" title={classification.reason}>
-            {classification.reason}
-          </span>
+          {classification.restated ? null : (
+            <span class="text-secondary fst-italic">{classification.reason}</span>
+          )}
         </div>
       </td>
       <td class={`text-end tabular text-nowrap align-top${credit ? " text-success" : ""}`}>
         {cents(classification.amount)}
       </td>
       <td class="align-top">
-        <span class={`badge ${style.class}`}>{style.label}</span>
+        <span class={pill}>{style.label}</span>
       </td>
       <td class="text-end text-nowrap align-top">
         {taggable ? (
@@ -410,8 +458,6 @@ export interface TransactionListProps {
   entries: ClassifiedTransaction[]
   needsReview: number
   summary: FilterSummary
-  /** The statement card's display name; see `TransactionRow`. */
-  card?: string
   /** Who a row can be attributed to. Empty for a household of one. */
   people: Person[]
 }
@@ -421,7 +467,6 @@ export const TransactionList = ({
   sel,
   needsReview,
   summary,
-  card,
   people,
 }: TransactionListProps) => (
   <div id="txn-list">
@@ -463,7 +508,7 @@ export const TransactionList = ({
         <table class="table table-sm txn-table align-middle mb-0">
           <tbody>
             {entries.map((entry) => (
-              <TransactionRow entry={entry} month={sel.month} card={card} people={people} />
+              <TransactionRow entry={entry} month={sel.month} people={people} />
             ))}
           </tbody>
         </table>

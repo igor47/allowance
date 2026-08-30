@@ -146,7 +146,6 @@ function statementOf(source: string, name: string, raw: unknown): StatementConfi
 function accountsOf(source: string, raw: unknown): Accounts {
   if (!isTable(raw)) throw new ConfigError(source, "[accounts] is missing or is not a table")
   const accounts: Record<string, AccountConfig> = {}
-  let statementOwner: string | null = null
 
   for (const [name, value] of Object.entries(raw)) {
     if (!isTable(value)) {
@@ -159,19 +158,14 @@ function accountsOf(source: string, raw: unknown): Accounts {
         `accounts."${name}".policy must be one of ${POLICIES.join(", ")}, got "${policy}"`
       )
     }
+    // Any number of accounts may carry a statement: a household of two usually
+    // has a card each rather than sharing one. This used to reject the second,
+    // because the summary boxes would otherwise have been about whichever the
+    // object happened to enumerate first — a limitation of three fixed boxes,
+    // enforced here for want of anywhere better. The boxes now sum across
+    // cards and the reconciliation is reported per card, so nothing has to
+    // choose and the guard is gone.
     const statement = statementOf(source, name, value.statement)
-    if (statement) {
-      // Two cards would make "the statement" ambiguous, and the summary boxes
-      // and the reconciliation line would silently be about whichever the
-      // object happened to enumerate first.
-      if (statementOwner) {
-        throw new ConfigError(
-          source,
-          `only one account may carry a statement; both "${statementOwner}" and "${name}" do`
-        )
-      }
-      statementOwner = name
-    }
     const settled = policy as AccountPolicy
     accounts[name] = statement ? { policy: settled, statement } : { policy: settled }
   }

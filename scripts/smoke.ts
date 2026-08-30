@@ -17,7 +17,7 @@ const client = new HttpLunchMoneyClient({ apiKey: config.lunchMoneyApiKey })
 const service = new DashboardService(client, config, new Cache(0))
 const dashboard = await service.build(today(config.timezone))
 
-const { allowance, card, cash } = dashboard
+const { allowance, cards, cash } = dashboard
 const line = (label: string, value: string) => console.log(`  ${label.padEnd(24)}${value.padStart(12)}`)
 
 console.log(`\nallowance — ${dashboard.today}\n`)
@@ -33,17 +33,23 @@ console.log(`\ncash\n`)
 for (const account of cash.accounts) line(account.name, money(account.balance))
 line("Total", money(cash.total))
 
-console.log(`\n${card.account}\n`)
-line(`Due ${card.lastClosed.due}`, money(card.lastClosed.total.net))
-line(`Accruing since ${card.current.start}`, money(card.current.total.net))
-if (card.reported !== null) line("Bank reports owed", money(card.reported))
+// Per card, never summed: the reconciliation is the one figure that must not
+// be added across cards. See `StatementCheck`.
+for (const card of cards) {
+  console.log(`\n${card.account}\n`)
+  line(`Due ${card.lastClosed.due}`, money(card.lastClosed.total.net))
+  line(`Accruing since ${card.current.start}`, money(card.current.total.net))
+  if (card.reported !== null) line("Bank reports owed", money(card.reported))
 
-const { reconciliation: rec } = card.settled
-console.log(`\nstatement ${card.settled.start}..${card.settled.end}, settled ${rec.paidOn ?? "—"}\n`)
-line("We reconstructed", money(rec.billed))
-if (rec.creditsAfterClose !== 0) line("Credits since close", money(rec.creditsAfterClose))
-line("Autopay debited", rec.paid === null ? "not yet" : money(rec.paid))
-if (rec.delta !== null) line("Difference", `${rec.agrees ? "" : "! "}${money(rec.delta)}`)
+  const { reconciliation: rec } = card.settled
+  console.log(
+    `\nstatement ${card.settled.start}..${card.settled.end}, settled ${rec.paidOn ?? "—"}\n`
+  )
+  line("We reconstructed", money(rec.billed))
+  if (rec.creditsAfterClose !== 0) line("Credits since close", money(rec.creditsAfterClose))
+  line("Autopay debited", rec.paid === null ? "not yet" : money(rec.paid))
+  if (rec.delta !== null) line("Difference", `${rec.agrees ? "" : "! "}${money(rec.delta)}`)
+}
 
 console.log(`\nreview\n`)
 line("Needs review", `${dashboard.needsReview}`)

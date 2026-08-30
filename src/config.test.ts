@@ -11,7 +11,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { parseConfig } from "./config"
-import { statementAccount } from "./domain/policy"
+import { statementAccounts } from "./domain/policy"
 
 const parse = (toml: string) => parseConfig(Bun.TOML.parse(toml), "test.toml")
 
@@ -36,10 +36,22 @@ describe("a valid config", () => {
       rolloverCapDays: 14,
     })
     expect(config.accounts.Card?.policy).toBe("spending")
-    expect(statementAccount(config.accounts)).toEqual({
-      name: "Card",
-      statement: { closeDay: 12, dueDay: 9 },
-    })
+    expect(statementAccounts(config.accounts)).toEqual([
+      { name: "Card", statement: { closeDay: 12, dueDay: 9 } },
+    ])
+  })
+
+  test("two cards, because a household of two usually carries one each", () => {
+    // This was rejected until the summary boxes learned to sum across cards.
+    const config = parse(`${MINIMAL}
+[accounts."Other Card"]
+policy = "spending"
+statement = { close_day = 3, due_day = 28 }
+`)
+    expect(statementAccounts(config.accounts)).toEqual([
+      { name: "Card", statement: { closeDay: 12, dueDay: 9 } },
+      { name: "Other Card", statement: { closeDay: 3, dueDay: 28 } },
+    ])
   })
 
   test("a household of one needs no people at all", () => {
@@ -61,7 +73,7 @@ history_start = "2025-01"
 [accounts."Checking"]
 policy = "fixed"
 `)
-    expect(statementAccount(config.accounts)).toBeNull()
+    expect(statementAccounts(config.accounts)).toEqual([])
   })
 })
 
@@ -78,16 +90,6 @@ history_start = "2025-01"
 policy = "spendng"
 `)
     ).toThrow(/policy must be one of spending, fixed, ignore, got "spendng"/)
-  })
-
-  test("two statement accounts, which would make 'the statement' ambiguous", () => {
-    expect(() =>
-      parse(`${MINIMAL}
-[accounts."Other Card"]
-policy = "spending"
-statement = { close_day = 3, due_day = 28 }
-`)
-    ).toThrow(/only one account may carry a statement/)
   })
 
   test("no accounts, because nothing would ever count", () => {
@@ -170,6 +172,6 @@ describe("the shipped example", () => {
       "Savings",
       "Wallet",
     ])
-    expect(statementAccount(config.accounts)?.name).toBe("Card")
+    expect(statementAccounts(config.accounts).map((c) => c.name)).toEqual(["Card"])
   })
 })

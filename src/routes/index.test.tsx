@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { CARD, CHECKING, SAVINGS } from "../test/accounts"
+import { CARD, CHECKING, SAVINGS, TEST_ACCOUNTS, WALLET } from "../test/accounts"
 import { txn } from "../test/factories"
 import { dashboard, visit } from "../test/page"
 import { aWorld } from "../test/world"
@@ -43,11 +43,15 @@ describe("dashboard", () => {
 
   test("shows cash, the closed statement, and what is accruing", async () => {
     const page = await dashboard(august())
-    expect(page.statLabels).toEqual(["Cash on hand", "Due 9/9", "Accruing now"])
+    // The due date moved out of the label and into the detail when the box
+    // learned to sum across cards: two cards have two due dates, and one
+    // label cannot carry both.
+    expect(page.statLabels).toEqual(["Cash on hand", "Due", "Accruing now"])
     // The card is a credit account and is not cash; the two bank accounts are.
     expect(page.stats[0]?.value).toBe("$7,000")
     // Everything on the card in the 7/13-8/12 cycle, tagged or not.
     expect(page.stats[1]?.value).toBe("$460")
+    expect(page.stats[1]?.detail).toBe("$460 on 9/9")
     expect(page.stats[2]?.value).toBe("$0")
   })
 
@@ -64,6 +68,43 @@ describe("dashboard", () => {
     )
     expect(page.stats[0]?.value).toBe("$2,000")
     expect(page.stats[2]?.detail).toContain("$460 on the card")
+  })
+
+  test("two cards sum into one set of boxes, each due date named", async () => {
+    /*
+     * The arrangement a couple actually has: a card each, on different
+     * cycles. Every figure is a total; the dates are not, so Due lists one
+     * section per due date rather than picking a winner. Before this the
+     * second card was silently absent from all three boxes.
+     */
+    const twoCards = aWorld({
+      today: "2026-08-14",
+      config: {
+        accounts: {
+          ...TEST_ACCOUNTS,
+          [WALLET]: { policy: "spending", statement: { closeDay: 20, dueDay: 15 } },
+        },
+      },
+    })
+      .account(CARD, { balance: "300.00" })
+      .account(WALLET, { balance: "200.00" })
+      // The cycles are staggered, which is the whole point: on 8/14 the Card's
+      // last statement closed 8/12 and debits 9/9, while the Wallet's closed
+      // 7/20 and debits 8/15. One label could not have said both.
+      .charge({ on: "2026-08-04", amount: 100, account: CARD })
+      .charge({ on: "2026-07-15", amount: 40, account: WALLET })
+      // Still accruing on the Wallet: its open cycle runs 7/21–8/20.
+      .charge({ on: "2026-08-06", amount: 25, account: WALLET })
+
+    const page = await dashboard(twoCards)
+    expect(page.statLabels).toEqual(["Cash on hand", "Due", "Accruing now"])
+    expect(page.stats[1]?.value).toBe("$140")
+    // Soonest first, and each figure carries the day it actually debits.
+    expect(page.stats[1]?.detail).toBe("$40 on 8/15 · $100 on 9/9")
+    expect(page.stats[2]?.value).toBe("$25")
+    // Both balances summed, and the earlier of the two closing dates.
+    expect(page.stats[2]?.detail).toContain("$500 on the cards")
+    expect(page.stats[2]?.detail).toContain("Aug 20")
   })
 
   test("an overspent month reads as a negative balance", async () => {

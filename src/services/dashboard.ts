@@ -13,7 +13,7 @@ import { type CycleTotal, cycleTotal, type Reconciliation, reconcile } from "../
 import { type Cycle, cycleView } from "../domain/cycle"
 import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates"
 import { type Freshness, freshness } from "../domain/freshness"
-import { findTransfers, statementAccount, unknownAccounts } from "../domain/policy"
+import { findTransfers, statementAccounts, unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
 import type { LmAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
 
@@ -25,6 +25,8 @@ export interface CashAccount {
 
 export interface CardView {
   account: string
+  /** When this card's next statement closes — the label the boxes sort on. */
+  closes: IsoDate
   /** What the bank says is owed right now. */
   reported: number | null
   lastClosed: Cycle & { total: CycleTotal }
@@ -37,7 +39,14 @@ export interface Dashboard {
   today: IsoDate
   allowance: AllowanceResult
   cash: { total: number; accounts: CashAccount[] }
-  card: CardView
+  /**
+   * Every card with a statement, soonest due first.
+   *
+   * A list because a household of two usually carries a card each. Empty is a
+   * legitimate config — the allowance works without a card — and the summary
+   * says so rather than rendering boxes about nothing.
+   */
+  cards: CardView[]
   /** In-period transactions, newest first. */
   transactions: ClassifiedTransaction[]
   needsReview: number
@@ -120,10 +129,24 @@ export class DashboardService {
   async build(today: IsoDate): Promise<Dashboard> {
     const { accounts, categories, allowance } = this.config
     // A config with no card is legitimate — the allowance works without one —
-    // but the summary boxes and the reconciliation line have nothing to be
-    // about, so `card` is null and the components say so.
-    const card = statementAccount(accounts)
-    const cycles = cycleView(today, card?.statement.closeDay ?? 1, card?.statement.dueDay ?? 1)
+    // and then this is empty and the boxes say so.
+    const cards = statementAccounts(accounts)
+    const cycled = cards.map((c) => ({
+      ...c,
+      cycles: cycleView(today, c.statement.closeDay, c.statement.dueDay),
+    }))
+    /*
+     * How far back the one fetch has to reach: far enough for every card's
+     * settled statement, not just the first one's. Two cards closing on the
+     * 12th and the 28th have settled cycles that begin two weeks apart, and
+     * reaching only as far as the later one would leave the other card's
+     * oldest charges out of its own bill.
+     */
+    const earliestSettled = cycled.reduce<IsoDate | null>(
+      (soonest, c) =>
+        soonest === null || c.cycles.settled.start < soonest ? c.cycles.settled.start : soonest,
+      null
+    )
 
     // One fetch covering the budgeting period, the open statement, and the one
     // before it — which is the only statement the autopay has settled, and so
@@ -136,7 +159,8 @@ export class DashboardService {
     // opened but posted just after it is missing from the statement total,
     // which understated a month's bill by a few hundred dollars.
     const periodStart = periodStartFor(allowance, today)
-    const earliest = periodStart < cycles.settled.start ? periodStart : cycles.settled.start
+    const earliest =
+      earliestSettled === null || periodStart < earliestSettled ? periodStart : earliestSettled
     const start = addDays(earliest, -POSTING_SLACK_DAYS)
     // `accounts` here is the config's policy; the API's, with balances, are
     // `balances`.
@@ -153,45 +177,21 @@ export class DashboardService {
         a.txn.date === b.txn.date ? b.txn.id - a.txn.id : b.txn.date.localeCompare(a.txn.date)
       )
 
-    const on = card?.name ?? ""
-    const lastClosedTotal = cycleTotal(
-      transactions,
-      cycles.lastClosed.start,
-      cycles.lastClosed.end,
-      on,
-      categories,
-      transfers
-    )
-    const currentTotal = cycleTotal(
-      transactions,
-      cycles.current.start,
-      cycles.current.end,
-      on,
-      categories,
-      transfers
-    )
-    const settledTotal = cycleTotal(
-      transactions,
-      cycles.settled.start,
-      cycles.settled.end,
-      on,
-      categories,
-      transfers
-    )
-    const reported = balanceOf(balances, on)
+    const totalFor = (on: string, cycle: { start: IsoDate; end: IsoDate }) =>
+      cycleTotal(transactions, cycle.start, cycle.end, on, categories, transfers)
 
-    return {
-      today,
-      allowance: computeAllowance(classified, allowance, today),
-      cash: cashAccounts(balances),
-      card: {
+    // Soonest due first, so "the next one" is the head of the list wherever a
+    // component wants a single figure rather than the sum.
+    const cardViews: CardView[] = cycled
+      .map(({ name: on, cycles }) => ({
         account: on,
-        reported,
-        lastClosed: { ...cycles.lastClosed, total: lastClosedTotal },
-        current: { ...cycles.current, total: currentTotal },
+        closes: cycles.current.closes,
+        reported: balanceOf(balances, on),
+        lastClosed: { ...cycles.lastClosed, total: totalFor(on, cycles.lastClosed) },
+        current: { ...cycles.current, total: totalFor(on, cycles.current) },
         settled: {
           ...cycles.settled,
-          total: settledTotal,
+          total: totalFor(on, cycles.settled),
           reconciliation: reconcile(transactions, cycles.settled, {
             account: on,
             categories,
@@ -199,7 +199,14 @@ export class DashboardService {
             windowStart: start,
           }),
         },
-      },
+      }))
+      .sort((a, b) => a.lastClosed.due.localeCompare(b.lastClosed.due))
+
+    return {
+      today,
+      allowance: computeAllowance(classified, allowance, today),
+      cash: cashAccounts(balances),
+      cards: cardViews,
       transactions: inPeriod,
       // Deposits are taggable but not review items — payroll arriving twice a
       // month is not a question anyone needs asked. They live under "deposits".

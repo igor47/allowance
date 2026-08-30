@@ -102,20 +102,27 @@ export function policyFor(accountName: string, accounts: Accounts): AccountPolic
 }
 
 /**
- * The account whose statement the summary is about, and when it cycles.
+ * Every account that carries a statement, and when each cycles.
  *
- * Exactly one account may carry `statement`; the loader rejects a config with
- * two, so by the time this runs the answer is unambiguous. Null means no card
- * was configured, which is a legitimate setup — the allowance still works, and
- * the summary simply has no statement to show.
+ * A household of two typically carries a card each rather than sharing one, so
+ * this is a list. It was a single account for a long time, and the config
+ * loader rejected a second — a UI limitation ("the summary boxes would
+ * silently be about whichever came first") enforced at the wrong layer. The
+ * boxes now sum across cards, so the ambiguity is gone and the guard with it.
+ *
+ * Empty is a legitimate setup: the allowance works without a card, and the
+ * summary simply has no statement to show.
+ *
+ * Ordered as `[accounts]` declares them; callers that care about order sort by
+ * date themselves, because "the next one due" is a question about this month
+ * rather than about the file.
  */
-export function statementAccount(
+export function statementAccounts(
   accounts: Accounts
-): { name: string; statement: StatementConfig } | null {
-  for (const [name, account] of Object.entries(accounts)) {
-    if (account.statement) return { name, statement: account.statement }
-  }
-  return null
+): { name: string; statement: StatementConfig }[] {
+  return Object.entries(accounts).flatMap(([name, account]) =>
+    account.statement ? [{ name, statement: account.statement }] : []
+  )
 }
 
 export type Bucket =

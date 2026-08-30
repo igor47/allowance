@@ -128,6 +128,50 @@ describe("tags", () => {
   })
 })
 
+describe("Lunch Money's own recurring link", () => {
+  test("a linked charge stops counting, without anyone tagging it", () => {
+    // The premium arrives on the discretionary card every month. Untagged it
+    // counts, so before this the household re-tagged the same charge forever.
+    const premium = aCharge({ on: "2026-08-29", amount: 145, payee: "Geico", recurring: true })
+    const seen = classify(premium)
+    expect(seen.bucket).toBe("recurring")
+    expect(seen.counts).toBe(false)
+  })
+
+  test("but it is not claimed as reviewed, so it stays in the queue", () => {
+    // The inference takes money out of the count, which is the direction this
+    // file never guesses in. Staying visible is what pays for the guess.
+    const premium = aCharge({ on: "2026-08-29", amount: 145, recurring: true })
+    expect(classify(premium).reviewed).toBe(false)
+    expect(classify(premium).taggable).toBe(true)
+  })
+
+  test("`spending` overrides it, because Lunch Money can link the wrong row", () => {
+    const disputed = aCharge({ on: "2026-08-29", amount: 145, recurring: true, tags: ["spending"] })
+    expect(classify(disputed).counts).toBe(true)
+  })
+
+  test("a matched transfer still beats it — that is a fact, not a reading", () => {
+    // A standing monthly transfer to savings can carry a recurring link and
+    // still be a movement rather than a commitment; both legs would otherwise
+    // report as "recurring" and the money would be counted as planned twice.
+    const [out, into] = aTransfer({ on: "2026-08-10", amount: 2_000, from: CHECKING, to: SAVINGS })
+    if (!out || !into) throw new Error("no legs")
+    const linked: LmTransaction = { ...out, recurring_id: 7 }
+    const transfers = findTransfers([linked, into], TEST_CATEGORIES)
+    expect(classify(linked, transfers).bucket).toBe("transfer")
+  })
+
+  test("payroll keeps its deposit bucket, so it is not asked about twice a month", () => {
+    // Income carries a recurring link too. Re-bucketing it would put a salary
+    // into the review queue, which the deposit bucket exists to prevent.
+    const salary = aDeposit({ on: "2026-08-22", amount: 4_500, payee: "Direct Deposit" })
+    const paid = classify({ ...salary, recurring_id: 9 })
+    expect(paid.bucket).toBe("deposit")
+    expect(paid.counts).toBe(false)
+  })
+})
+
 describe("negative amounts", () => {
   test("a refund on the card credits the allowance back", () => {
     const result = classify(aRefund({ on: "2026-08-06", amount: 38, payee: "A Retailer" }))

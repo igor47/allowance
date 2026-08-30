@@ -28,6 +28,16 @@ export interface LmTransaction {
   asset_display_name: string | null
   institution_name: string | null
   tags: LmTag[]
+  /**
+   * The recurring item Lunch Money has linked this transaction to, if any.
+   *
+   * Their matcher sets it when a row agrees with an item on payee, amount and
+   * an expected occurrence date — which is a stronger claim than any of the
+   * category rules in `[categories]`, and unlike them it needs no
+   * configuration at all. `classify()` reads it so a subscription does not
+   * have to be tagged again every month.
+   */
+  recurring_id: number | null
   /** Plaid's raw payload as a JSON string. See details.ts. */
   plaid_metadata?: string | null
 }

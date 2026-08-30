@@ -330,6 +330,7 @@ export function hydrate(txn: V2Transaction, lookups: Lookups): LmTransaction {
     date: txn.date,
     amount: txn.amount,
     currency: txn.currency,
+    recurring_id: txn.recurring_id,
     payee: txn.payee,
     original_name: txn.original_name,
     category_name: category?.name ?? null,

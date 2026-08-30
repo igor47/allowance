@@ -426,6 +426,39 @@ export function classify(
     }
 
   // Below here everything is a guess about a payee, so an explicit tag wins.
+
+  /*
+   * A charge Lunch Money has linked to one of its own recurring items.
+   *
+   * This is the same delegation the `[categories]` lists already make, on
+   * better evidence: a category rule matches a payee, whereas a recurring link
+   * means Lunch Money reconciled payee, amount and an expected occurrence date
+   * against an item somebody set up on purpose. Without it the household
+   * re-tags the same insurance premium every month forever, on a card where
+   * untagged means discretionary — which is the state the demo account is in.
+   *
+   * `reviewed` stays false and the row stays in the review queue, unlike a
+   * hand-applied `recurring` tag. Nobody has confirmed this one, and the
+   * inference removes money from the count, which is the direction this file
+   * is otherwise careful never to guess in; leaving it visible is the price of
+   * making the guess at all.
+   *
+   * Outflows only. An inflow with a recurring link is payroll, which is
+   * already a `deposit` and already excluded from review — re-bucketing it
+   * would start asking about a salary twice a month, and would say
+   * "recurring" where the useful word is "deposit".
+   */
+  if (txn.recurring_id !== null && amount > 0) {
+    return {
+      bucket: "recurring",
+      counts: false,
+      reviewed: false,
+      taggable: true,
+      amount,
+      reason: "Lunch Money links this to a recurring item",
+    }
+  }
+
   if (isInternalTransfer(txn, categories)) return TRANSFER("internal account sweep", amount)
 
   if (policy === "fixed") {

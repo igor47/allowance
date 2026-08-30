@@ -95,6 +95,12 @@ export interface ChargeOptions {
   pending?: boolean
   /** The raw statement descriptor, when a test cares that it differs. */
   descriptor?: string
+  /**
+   * True when Lunch Money has linked this row to one of its recurring items,
+   * which is a claim about the row rather than about the plan — the id itself
+   * is never read, only whether there is one.
+   */
+  recurring?: boolean
 }
 
 export interface DepositOptions {
@@ -366,6 +372,7 @@ function chargeOverrides(options: ChargeOptions, amount: number): TxnOverrides {
     category_name: options.category ?? "Shopping",
     exclude_from_totals: options.excluded ?? false,
     is_pending: options.pending ?? false,
+    recurring_id: options.recurring ? 1 : null,
     ...accountFields(options.account ?? CARD),
     // Only written when it differs, so the "posted lags the swipe" cases are
     // visible in the scenario rather than implied by a metadata blob.

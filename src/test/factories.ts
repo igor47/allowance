@@ -82,6 +82,7 @@ export function txn(overrides: TxnOverrides = {}): LmTransaction {
     exclude_from_totals: false,
     is_pending: false,
     status: "cleared",
+    recurring_id: null,
     account_display_name: CARD,
     plaid_account_display_name: CARD,
     asset_display_name: null,

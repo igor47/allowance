@@ -51,6 +51,21 @@ describe("dashboard", () => {
     expect(page.stats[2]?.value).toBe("$0")
   })
 
+  test("a hand-kept account is cash on hand, and a hand-kept card has a balance", async () => {
+    // A household with no Plaid link at all keeps every account by hand. Its
+    // checking balance is still cash, and its card's balance is still the
+    // figure the reconciliation line is checked against; reading only
+    // `plaid_accounts` showed such a household "$0" and no issuer figure.
+    const page = await dashboard(
+      august()
+        .account(CHECKING, { balance: "1200.00", source: "manual" })
+        .account(SAVINGS, { balance: "800.00", source: "manual" })
+        .account(CARD, { balance: "460.00", source: "manual" })
+    )
+    expect(page.stats[0]?.value).toBe("$2,000")
+    expect(page.stats[2]?.detail).toContain("$460 on the card")
+  })
+
   test("an overspent month reads as a negative balance", async () => {
     const page = await dashboard(august().charge({ on: "2026-08-06", amount: 3_000 }))
     expect(page.hero).toBe("-$600")

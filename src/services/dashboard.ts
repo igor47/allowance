@@ -15,7 +15,7 @@ import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates
 import { type Freshness, freshness } from "../domain/freshness"
 import { findTransfers, statementAccount, unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
-import type { LmPlaidAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
+import type { LmAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
 
 export interface CashAccount {
   name: string
@@ -79,7 +79,7 @@ export class DashboardService {
     const items = await this.cache.fetch(`recurring:${start}:${end}`, () =>
       this.client.recurringItems(start, end)
     )
-    return budgetView(items, today)
+    return budgetView(items, today, this.config.accounts)
   }
 
   /** Force the next build to re-read from the API. */
@@ -110,11 +110,11 @@ export class DashboardService {
   }
 
   private async load(start: IsoDate, end: IsoDate) {
-    const [transactions, plaidAccounts] = await Promise.all([
+    const [transactions, balances] = await Promise.all([
       this.cache.fetch(`txns:${start}:${end}`, () => this.client.transactions(start, end)),
-      this.cache.fetch("accounts", () => this.client.plaidAccounts()),
+      this.cache.fetch("accounts", () => this.client.accounts()),
     ])
-    return { transactions, plaidAccounts }
+    return { transactions, balances }
   }
 
   async build(today: IsoDate): Promise<Dashboard> {
@@ -138,8 +138,9 @@ export class DashboardService {
     const periodStart = periodStartFor(allowance, today)
     const earliest = periodStart < cycles.settled.start ? periodStart : cycles.settled.start
     const start = addDays(earliest, -POSTING_SLACK_DAYS)
-    // `accounts` here is the config's policy; the API's are `plaidAccounts`.
-    const { transactions, plaidAccounts } = await this.load(start, today)
+    // `accounts` here is the config's policy; the API's, with balances, are
+    // `balances`.
+    const { transactions, balances } = await this.load(start, today)
 
     // One index, shared: the classifier needs it to bucket both legs of a
     // movement, and the statement needs it to know which row on the card was
@@ -177,12 +178,12 @@ export class DashboardService {
       categories,
       transfers
     )
-    const reported = balanceOf(plaidAccounts, on)
+    const reported = balanceOf(balances, on)
 
     return {
       today,
       allowance: computeAllowance(classified, allowance, today),
-      cash: cashAccounts(plaidAccounts),
+      cash: cashAccounts(balances),
       card: {
         account: on,
         reported,
@@ -205,7 +206,7 @@ export class DashboardService {
       needsReview: inPeriod.filter(needsReview).length,
       unknownAccounts: unknownAccounts(transactions, accounts),
       freshness: freshness(
-        plaidAccounts,
+        balances,
         this.config.refreshAfterMinutes,
         transactions.reduce<string | null>(
           (max, t) => (max === null || t.date > max ? t.date : max),
@@ -254,12 +255,12 @@ export class DashboardService {
   }
 }
 
-function balanceOf(accounts: LmPlaidAccount[], displayName: string): number | null {
+function balanceOf(accounts: LmAccount[], displayName: string): number | null {
   const account = accounts.find((a) => (a.display_name ?? a.name) === displayName)
   return account ? account.to_base : null
 }
 
-function cashAccounts(accounts: LmPlaidAccount[]): { total: number; accounts: CashAccount[] } {
+function cashAccounts(accounts: LmAccount[]): { total: number; accounts: CashAccount[] } {
   const cash = accounts
     .filter((a) => a.type === "cash")
     .map((a) => ({

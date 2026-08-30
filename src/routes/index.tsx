@@ -123,8 +123,8 @@ dashboardRoutes.get("/", async (c) => {
       )}
       {dashboard.unknownAccounts.length > 0 ? (
         <div class="alert alert-warning py-2 small">
-          Not counted — no policy for {dashboard.unknownAccounts.join(", ")}. Add it to
-          <code class="ms-1">ACCOUNT_POLICY</code>.
+          Not counted — no policy for {dashboard.unknownAccounts.join(", ")}. Add it under
+          <code class="ms-1">[accounts]</code> in allowance.toml.
         </div>
       ) : null}
       <StatementCheck dashboard={dashboard} />

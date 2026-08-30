@@ -2,14 +2,14 @@
  * The four API shapes, built from as little as a test wants to say.
  *
  * Everything here is invented: round amounts, made-up payees, and account names
- * taken from `ACCOUNT_POLICY`, which is production configuration rather than
+ * taken from `allowance.example.toml`, which is shipped configuration rather than
  * anything private. A test that needs a real-looking descriptor writes one.
  *
  * These are the raw shapes. `world.ts` sits on top and speaks in verbs —
  * charges, refunds, deposits — which is what scenarios should use.
  */
 
-import type { LmPlaidAccount, LmRecurringItem, LmTag, LmTransaction } from "../lunchmoney/types"
+import type { LmAccount, LmRecurringItem, LmTag, LmTransaction } from "../lunchmoney/types"
 import { CARD } from "./accounts"
 
 let nextId = 1
@@ -98,9 +98,10 @@ export function txn(overrides: TxnOverrides = {}): LmTransaction {
  * coherent recent past rather than to null, so a scenario that does not care
  * about staleness does not have to say anything about it.
  */
-export function account(overrides: Partial<LmPlaidAccount> = {}): LmPlaidAccount {
+export function account(overrides: Partial<LmAccount> = {}): LmAccount {
   return {
     id: anId(),
+    source: "plaid",
     name: "CREDIT CARD",
     display_name: CARD,
     type: "credit",
@@ -143,6 +144,7 @@ export function recurringItem(overrides: Partial<LmRecurringItem> = {}): LmRecur
     is_income: false,
     plaid_account_id: 1,
     asset_id: null,
+    account_name: CARD,
     transactions_within_range: [],
     missing_dates_within_range: [],
     ...overrides,

@@ -7,7 +7,7 @@
  * but ask for restraint, so this decides when it is actually worth asking.
  */
 
-import type { LmPlaidAccount } from "../lunchmoney/types"
+import type { LmAccount } from "../lunchmoney/types"
 
 export interface Freshness {
   /**
@@ -42,8 +42,14 @@ const newest = (values: (string | null | undefined)[]): Date | null => {
   return dates.reduce((a, b) => (a > b ? a : b))
 }
 
+/**
+ * Manual accounts take part only through their balance date: they are never
+ * imported from or fetched, and their nulls fall out of `newest()`. A
+ * household with no Plaid link at all therefore reads "polled never", which
+ * is what happened.
+ */
 export function freshness(
-  accounts: LmPlaidAccount[],
+  accounts: LmAccount[],
   refreshAfterMinutes: number,
   newestTransaction: string | null = null,
   now: Date = new Date()

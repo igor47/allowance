@@ -14,7 +14,7 @@
 
 import type { Config } from "../config"
 import { addDays, type IsoDate } from "../domain/dates"
-import type { LmPlaidAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
+import type { LmAccount, LmRecurringItem, LmTransaction } from "../lunchmoney/types"
 import {
   CARD,
   CHECKING,
@@ -27,7 +27,7 @@ import { account, metadata, recurringItem, type TxnOverrides, txn } from "./fact
 
 export interface World {
   transactions: LmTransaction[]
-  accounts: LmPlaidAccount[]
+  accounts: LmAccount[]
   recurring: LmRecurringItem[]
   today: IsoDate
   now: Date
@@ -176,8 +176,16 @@ export interface SubscriptionOptions {
   cadence?: string
   granularity?: string
   quantity?: number
-  /** False for a manually-managed account: no feed, so nothing can ever link. */
+  /**
+   * False for a manually-managed account nobody records against, which is
+   * what `tracked: false` used to mean unconditionally. Whether a manual
+   * account is tracked is now the config's call, so `on` names the account
+   * and the config decides; `tracked: false` alone puts it on one the config
+   * has never heard of.
+   */
   tracked?: boolean
+  /** Which account the item bills to. */
+  on?: TestAccount
   /** Dates in the period the plan expected and nothing arrived for. */
   missing?: IsoDate[]
   /** Dates the plan expects a charge on, when the cadence alone cannot say. */
@@ -192,7 +200,7 @@ export interface SubscriptionOptions {
  */
 export class WorldBuilder implements World {
   readonly transactions: LmTransaction[] = []
-  readonly accounts: LmPlaidAccount[] = []
+  readonly accounts: LmAccount[] = []
   readonly recurring: LmRecurringItem[] = []
   readonly today: IsoDate
   readonly now: Date
@@ -218,16 +226,20 @@ export class WorldBuilder implements World {
    * Declare an account. Called twice for the same name, the second wins —
    * so the constructor's default card can be replaced with a balance.
    */
-  account(name: TestAccount, over: Partial<LmPlaidAccount> = {}): this {
+  account(name: TestAccount, over: Partial<LmAccount> = {}): this {
     const timings = timingsFor(this.today)
+    // A manual account has a balance date and nothing else: it is never
+    // imported from or fetched, and a scenario that says `source: "manual"`
+    // should not have to null three timestamps to mean it.
+    const manual = over.source === "manual"
     const built = account({
       display_name: name,
       name,
       type: name === CARD ? "credit" : "cash",
       balance_last_update: timings.read,
-      last_import: timings.imported,
-      last_fetch: timings.read,
-      plaid_last_successful_update: timings.read,
+      last_import: manual ? null : timings.imported,
+      last_fetch: manual ? null : timings.read,
+      plaid_last_successful_update: manual ? null : timings.read,
       ...over,
       // A balance given as a string should still reach `to_base`, which is what
       // the dashboard actually reads.
@@ -558,6 +570,7 @@ function recurringOf(options: SubscriptionOptions, isIncome: boolean): LmRecurri
     is_income: isIncome,
     plaid_account_id: tracked ? 1 : null,
     asset_id: tracked ? null : 1,
+    account_name: options.on ?? (tracked ? CARD : null),
     missing_dates_within_range: options.missing ?? [],
     transactions_within_range: Array.from({ length: matched }, (_, i) => ({
       id: i + 1,

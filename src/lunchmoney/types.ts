@@ -32,8 +32,19 @@ export interface LmTransaction {
   plaid_metadata?: string | null
 }
 
-export interface LmPlaidAccount {
+/**
+ * An account and its balance, whether Lunch Money feeds it from Plaid or a
+ * person keeps it by hand.
+ *
+ * The two arrive from different endpoints and the manual one carries fewer
+ * fields, but the dashboard asks both the same questions — what is the
+ * balance, what kind of account is it, when was that last true — so they are
+ * one shape here. `source` says which, and is what the freshness clock reads:
+ * a manual account is never polled, so it has no import or fetch times.
+ */
+export interface LmAccount {
   id: number
+  source: "plaid" | "manual"
   name: string
   display_name: string | null
   type: string
@@ -45,10 +56,11 @@ export interface LmPlaidAccount {
   balance: string
   to_base: number
   currency: string
+  /** When the balance was last read; `balance_as_of` for a manual account. */
   balance_last_update: string
-  /** When transactions were last imported from Plaid. */
+  /** When transactions were last imported from Plaid. Null for a manual account. */
   last_import: string | null
-  /** When Lunch Money last asked Plaid for anything. */
+  /** When Lunch Money last asked Plaid for anything. Null for a manual account. */
   last_fetch: string | null
   plaid_last_successful_update: string | null
 }
@@ -105,6 +117,12 @@ export interface LmRecurringItem {
   plaid_account_id: number | null
   /** Set instead when it belongs to a manually-managed account. */
   asset_id: number | null
+  /**
+   * Display name of whichever account it belongs to, resolved the same way
+   * `accountNameOf()` resolves a transaction's, so it can be looked up in the
+   * config's `[accounts]`. Null when the item names no account at all.
+   */
+  account_name: string | null
   transactions_within_range: { id: number; date: string }[] | null
   missing_dates_within_range: string[] | null
 }
@@ -112,7 +130,8 @@ export interface LmRecurringItem {
 export interface LunchMoneyClient {
   transactions(start: string, end: string): Promise<LmTransaction[]>
   recurringItems(start: string, end: string): Promise<LmRecurringItem[]>
-  plaidAccounts(): Promise<LmPlaidAccount[]>
+  /** Every account with a balance — linked and manual alike. */
+  accounts(): Promise<LmAccount[]>
   tags(): Promise<LmTag[]>
   setTags(transactionId: number, tags: string[]): Promise<void>
   /** Queue a background pull from Plaid. Asynchronous; results arrive later. */

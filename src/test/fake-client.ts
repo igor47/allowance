@@ -1,5 +1,5 @@
 import type {
-  LmPlaidAccount,
+  LmAccount,
   LmRecurringItem,
   LmTag,
   LmTransaction,
@@ -18,12 +18,12 @@ import type { World } from "./world"
 export class FakeLunchMoneyClient implements LunchMoneyClient {
   readonly writes: { transactionId: number; tags: string[] }[] = []
   private readonly store: LmTransaction[]
-  private readonly accounts: LmPlaidAccount[]
+  private readonly balances: LmAccount[]
   private readonly recurring: LmRecurringItem[]
 
   constructor(world: World) {
     this.store = world.transactions.map((t) => ({ ...t, tags: [...t.tags] }))
-    this.accounts = world.accounts
+    this.balances = world.accounts
     this.recurring = world.recurring
   }
 
@@ -41,8 +41,8 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
     return this.recurring
   }
 
-  async plaidAccounts(): Promise<LmPlaidAccount[]> {
-    return this.accounts
+  async accounts(): Promise<LmAccount[]> {
+    return this.balances
   }
 
   async tags(): Promise<LmTag[]> {

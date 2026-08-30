@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
+import { OLD_CARD, TEST_ACCOUNTS, WALLET } from "../test/accounts"
 import { recurringItem as item } from "../test/factories"
 import { aWorld } from "../test/world"
-import { budgetView, decodeEntities, perMonth, stateOf } from "./budget"
+import { budgetView, decodeEntities, isTracked, perMonth, stateOf } from "./budget"
 
 describe("occurrences per month", () => {
   /** A month the plan does not fire in — the ordinary state of a yearly bill. */
@@ -124,15 +125,42 @@ describe("state", () => {
     )
   })
 
-  test("an item on an account with no feed is never overdue", () => {
-    // A manually-managed card: no transaction can ever link, so flagging it
-    // would cry wolf every day of every month.
+  test("an item on an account nobody records against is never overdue", () => {
+    // A manually-managed card the config has never heard of: no transaction
+    // will ever link, so flagging it would cry wolf every day of every month.
     const manual = item({
       plaid_account_id: null,
       asset_id: 1,
+      account_name: "A Card Kept Nowhere",
       missing_dates_within_range: ["2026-08-01"],
     })
-    expect(stateOf(manual, "2026-08-16")).toBe("untracked")
+    expect(stateOf(manual, "2026-08-16", TEST_ACCOUNTS)).toBe("untracked")
+  })
+
+  test("a manual account the config counts is tracked, and can be overdue", () => {
+    // The API describes a hand-kept checking account someone enters every
+    // payment into exactly as it describes a card nobody reconciles. Only the
+    // config can tell them apart: an account listed as spending or fixed is
+    // one the household records against, so its items are expected to match.
+    const onTheWallet = item({
+      plaid_account_id: null,
+      asset_id: 1,
+      account_name: WALLET,
+      missing_dates_within_range: ["2026-08-01"],
+    })
+    expect(isTracked(onTheWallet, TEST_ACCOUNTS)).toBe(true)
+    expect(stateOf(onTheWallet, "2026-08-16", TEST_ACCOUNTS)).toBe("overdue")
+  })
+
+  test("an ignored manual account is not tracked, whatever it says", () => {
+    const onTheOldCard = item({ plaid_account_id: null, asset_id: 1, account_name: OLD_CARD })
+    expect(isTracked(onTheOldCard, TEST_ACCOUNTS)).toBe(false)
+  })
+
+  test("a linked account is tracked whether or not the config lists it", () => {
+    // Plaid delivers the charge and Lunch Money links it; the config has no
+    // say, and an unlisted account is surfaced elsewhere as unknown.
+    expect(isTracked(item({ account_name: "Some New Card" }), TEST_ACCOUNTS)).toBe(true)
   })
 })
 

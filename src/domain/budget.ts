@@ -13,6 +13,7 @@
 
 import type { LmRecurringItem } from "../lunchmoney/types"
 import { endOfMonth, type IsoDate, startOfMonth } from "./dates"
+import type { Accounts } from "./policy"
 
 export type CommitmentState =
   /** A transaction is linked for this period. */
@@ -174,10 +175,37 @@ function covers(
   return range.start <= period.start && range.end >= period.end
 }
 
-export function stateOf(item: LmRecurringItem, today: IsoDate): CommitmentState {
-  // No plaid account means a manually-managed one: no feed, so nothing can ever
-  // link. Reporting that as overdue would cry wolf every day of every month.
-  if (!item.plaid_account_id) return "untracked"
+/**
+ * Will a transaction ever be linked to this item?
+ *
+ * For a linked account, yes: Plaid delivers the charge and Lunch Money
+ * matches it. For a manual account the answer is not in the data — a card
+ * kept by hand and never reconciled produces no transactions at all, while a
+ * checking account someone enters every payment into produces all of them,
+ * and the API describes both identically.
+ *
+ * So the config decides. A manual account listed under `[accounts]` as
+ * `spending` or `fixed` is one the household says it records against, and
+ * its items can be expected to match; one that is `ignore`d or not listed is
+ * not. Before this the rule was "no Plaid, no tracking", which reported every
+ * item of an all-manual household as untracked and its entire plan as
+ * invisible money.
+ */
+export function isTracked(item: LmRecurringItem, accounts: Accounts): boolean {
+  if (item.plaid_account_id !== null) return true
+  if (item.account_name === null) return false
+  const policy = accounts[item.account_name]?.policy
+  return policy !== undefined && policy !== "ignore"
+}
+
+export function stateOf(
+  item: LmRecurringItem,
+  today: IsoDate,
+  accounts: Accounts = {}
+): CommitmentState {
+  // Reporting an item that can never link as overdue would cry wolf every day
+  // of every month.
+  if (!isTracked(item, accounts)) return "untracked"
   if ((item.transactions_within_range ?? []).length > 0) return "matched"
   const missing = item.missing_dates_within_range ?? []
   return missing.some((d) => d <= today) ? "overdue" : "upcoming"
@@ -186,7 +214,8 @@ export function stateOf(item: LmRecurringItem, today: IsoDate): CommitmentState 
 function commitmentOf(
   item: LmRecurringItem,
   today: IsoDate,
-  period: { start: IsoDate; end: IsoDate }
+  period: { start: IsoDate; end: IsoDate },
+  accounts: Accounts
 ): Commitment {
   const amount = Math.abs(Number.parseFloat(item.amount))
   return {
@@ -196,25 +225,31 @@ function commitmentOf(
     amount,
     monthly: amount * perMonth(item, period),
     cadence: item.cadence ?? "monthly",
-    state: stateOf(item, today),
+    state: stateOf(item, today, accounts),
     missing: item.missing_dates_within_range ?? [],
     expected: item.expected_dates ?? [],
     dueThisPeriod: covers(item.expected_range, period)
       ? amount * (item.expected_dates?.length ?? 0)
       : null,
     matched: (item.transactions_within_range ?? []).length,
-    tracked: !!item.plaid_account_id,
+    tracked: isTracked(item, accounts),
   }
 }
 
 const byMonthly = (a: Commitment, b: Commitment) => b.monthly - a.monthly
 
-export function budgetView(items: LmRecurringItem[], today: IsoDate): BudgetView {
+export function budgetView(
+  items: LmRecurringItem[],
+  today: IsoDate,
+  accounts: Accounts = {}
+): BudgetView {
   const periodStart = startOfMonth(today)
   const periodEnd = endOfMonth(today)
   const days = Number.parseInt(periodEnd.slice(8), 10)
 
-  const all = items.map((item) => commitmentOf(item, today, { start: periodStart, end: periodEnd }))
+  const all = items.map((item) =>
+    commitmentOf(item, today, { start: periodStart, end: periodEnd }, accounts)
+  )
   const income = all.filter((_, i) => items[i]?.is_income).sort(byMonthly)
   const commitments = all.filter((_, i) => !items[i]?.is_income).sort(byMonthly)
 

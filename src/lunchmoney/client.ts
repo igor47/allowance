@@ -4,7 +4,7 @@
  * v2 de-hydrates the transaction: category name, `is_income`,
  * `exclude_from_totals`, the account's display name and the tags are all gone
  * from it, replaced by ids. Nearly every one of those is something the domain
- * branches on — `ACCOUNT_POLICY` is keyed on the account's display name — so
+ * branches on — the `[accounts]` policy is keyed on the account's display name — so
  * this client joins them back before anything downstream sees a transaction.
  *
  * That join is the whole design. `src/domain/` still receives exactly the
@@ -12,13 +12,7 @@
  * untouched by the migration.
  */
 
-import type {
-  LmPlaidAccount,
-  LmRecurringItem,
-  LmTag,
-  LmTransaction,
-  LunchMoneyClient,
-} from "./types"
+import type { LmAccount, LmRecurringItem, LmTag, LmTransaction, LunchMoneyClient } from "./types"
 import type {
   V2Category,
   V2ManualAccount,
@@ -50,7 +44,7 @@ export class LunchMoneyError extends Error {
 
 export interface HttpClientOptions {
   apiKey: string
-  /** Retries on 429. Their rate limit is undocumented and unforgiving. */
+  /** Retries on 429. The documented limit is 100 requests/minute per IP (lunchmoney.dev/rate-limits). */
   maxRetries?: number
   sleep?: (ms: number) => Promise<void>
   /** How long the id→name lookups are held. Balances never come from these. */
@@ -186,10 +180,23 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
   /**
    * Always a live read: this is what the freshness clock and the cash figures
    * are built from, so it must never come from the join-table cache.
+   *
+   * Both kinds of account, because a household that keeps its checking
+   * account by hand still has cash on hand, and a card kept by hand still has
+   * a balance for the reconciliation line to be checked against. Reading only
+   * `plaid_accounts` here showed such a household "$0" and no issuer figure,
+   * silently — the demo account, which has no Plaid link at all, is where that
+   * was noticed.
    */
-  async plaidAccounts(): Promise<LmPlaidAccount[]> {
-    const body = await this.request<{ plaid_accounts: V2PlaidAccount[] }>("plaid_accounts")
-    return body.plaid_accounts.map(toPlaidAccount)
+  async accounts(): Promise<LmAccount[]> {
+    const [plaid, manual] = await Promise.all([
+      this.request<{ plaid_accounts: V2PlaidAccount[] }>("plaid_accounts"),
+      this.request<{ manual_accounts: V2ManualAccount[] }>("manual_accounts"),
+    ])
+    return [
+      ...plaid.plaid_accounts.map(toPlaidAccount),
+      ...manual.manual_accounts.map(toManualAccount),
+    ]
   }
 
   async tags(): Promise<LmTag[]> {
@@ -253,9 +260,10 @@ function byId<T extends { id: number }>(rows: T[]): Map<number, T> {
 const nameOf = (account: { display_name: string | null; name: string }): string =>
   account.display_name ?? account.name
 
-function toPlaidAccount(a: V2PlaidAccount): LmPlaidAccount {
+function toPlaidAccount(a: V2PlaidAccount): LmAccount {
   return {
     id: a.id,
+    source: "plaid",
     name: a.name,
     display_name: a.display_name,
     type: a.type,
@@ -275,11 +283,38 @@ function toPlaidAccount(a: V2PlaidAccount): LmPlaidAccount {
 }
 
 /**
+ * The fields Plaid would have supplied are null rather than invented: nothing
+ * ever imports into a manual account, and `freshness()` reads null as "never",
+ * which is the truth.
+ */
+function toManualAccount(a: V2ManualAccount): LmAccount {
+  return {
+    id: a.id,
+    source: "manual",
+    name: a.name,
+    display_name: a.display_name,
+    type: a.type,
+    subtype: a.subtype,
+    mask: "",
+    institution_name: a.institution_name ?? "",
+    status: a.closed_on ? "closed" : (a.status ?? "active"),
+    limit: null,
+    balance: a.balance,
+    to_base: a.to_base,
+    currency: a.currency,
+    balance_last_update: a.balance_as_of ?? "",
+    last_import: null,
+    last_fetch: null,
+    plaid_last_successful_update: null,
+  }
+}
+
+/**
  * A de-hydrated transaction, made whole again.
  *
  * The two account fields are set the way v1 set them — `plaid_*` for a linked
  * account, `asset_*` for a manual one — because `accountNameOf()` falls through
- * them in that order and `ACCOUNT_POLICY` is keyed on the result.
+ * them in that order and the `[accounts]` policy is keyed on the result.
  */
 export function hydrate(txn: V2Transaction, lookups: Lookups): LmTransaction {
   const category =
@@ -323,6 +358,14 @@ export function hydrateRecurring(item: V2RecurringItem, lookups: Lookups): LmRec
       ? null
       : (lookups.categories.get(overrides.category_id) ?? null)
   const expected = matches?.expected_occurrence_dates ?? []
+  const plaid =
+    criteria.plaid_account_id === null
+      ? null
+      : (lookups.plaid.get(criteria.plaid_account_id) ?? null)
+  const manual =
+    criteria.manual_account_id === null
+      ? null
+      : (lookups.manual.get(criteria.manual_account_id) ?? null)
 
   return {
     id: item.id,
@@ -342,6 +385,7 @@ export function hydrateRecurring(item: V2RecurringItem, lookups: Lookups): LmRec
     is_income: category?.is_income ?? false,
     plaid_account_id: criteria.plaid_account_id,
     asset_id: criteria.manual_account_id,
+    account_name: plaid ? nameOf(plaid) : manual ? nameOf(manual) : null,
     transactions_within_range: (matches?.found_transactions ?? []).map((t) => ({
       id: t.transaction_id,
       date: t.date,

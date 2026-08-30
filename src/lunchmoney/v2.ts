@@ -79,13 +79,26 @@ export interface V2PlaidAccount {
   plaid_last_successful_update: string | null
 }
 
-/** An account with no feed. v1 called these assets. */
+/**
+ * An account with no feed. v1 called these assets.
+ *
+ * It still has a balance — entered by hand or moved by the transactions a
+ * person records against it — and `balance_as_of` says when that was last
+ * true. There are no import or fetch times because nothing is ever fetched.
+ */
 export interface V2ManualAccount {
   id: number
   name: string
   display_name: string | null
   institution_name: string | null
   type: string
+  subtype: string | null
+  status: string | null
+  balance: string
+  currency: string
+  to_base: number
+  balance_as_of: string | null
+  closed_on: string | null
 }
 
 /**

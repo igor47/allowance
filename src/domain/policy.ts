@@ -63,8 +63,10 @@ export interface StatementConfig {
 export interface AccountConfig {
   policy: AccountPolicy
   /**
-   * Set on exactly one account: the credit card whose cycle drives the summary
-   * boxes and the reconciliation line. Absent everywhere else.
+   * Set on a credit card whose cycle drives the summary boxes and the
+   * reconciliation line, and absent everywhere else. Any number of accounts may
+   * carry one: two people usually hold a card each, the boxes sum across them,
+   * and `reconcile()` reports a line per card.
    */
   statement?: StatementConfig
 }

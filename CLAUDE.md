@@ -63,7 +63,7 @@ Default to Bun over Node.
 - `bun <file>`, `bun test`, `bun install` — not node/jest/npm.
 - Bun loads `.env` automatically; don't add dotenv.
 - **Never** run `mise run smoke`, or any other live API call, from a test or
-  from CI. The Lunch Money rate limit is undocumented and aggressive. Nothing
+  from CI. The Lunch Money rate limit is 100 requests/minute per IP. Nothing
   under `src/` knows how to reach the network, so no test can.
 
 ## Framework

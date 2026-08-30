@@ -71,11 +71,12 @@ short = "S"
 
 [accounts."Card"]
 policy = "spending"
-# Exactly one account carries `statement` — the credit card whose cycle drives
-# the summary boxes and the reconciliation line. `close_day` is the day of the
-# month the statement closes; `due_day` is the day of the *following* month the
-# autopay debits. Both clamp on short months, so 31 lands on the 28th in
-# February.
+# Any account can carry `statement` — a credit card whose cycle drives the
+# summary boxes and the reconciliation line. A household with a card each lists
+# both: the boxes sum across them and the reconciliation stays per card.
+# `close_day` is the day of the month the statement closes; `due_day` is the day
+# of the *following* month the autopay debits. Both clamp on short months, so 31
+# lands on the 28th in February.
 statement = { close_day = 12, due_day = 9 }
 
 [accounts."Wallet"]

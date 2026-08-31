@@ -698,6 +698,31 @@ describe("phone layout", () => {
     ).toEqual(["Alex", "Sam"])
   })
 
+  test("a third person is a third button, and the widths follow", async () => {
+    /*
+     * A household is not two people. Ours is three, the third being a dog who
+     * eats, and the layout had the number of buttons written into it twice —
+     * an 18rem column and a `flex: 2` on the people — so his button sat off
+     * the right of the row. The table now hands the stylesheet the count, and
+     * both numbers are derived from it.
+     */
+    const three = aWorld({
+      today: "2026-08-14",
+      config: {
+        people: [
+          { tag: "alex", label: "Alex", short: "A" },
+          { tag: "sam", label: "Sam", short: "S" },
+          { tag: "rex", label: "Rex", short: "R" },
+        ],
+      },
+    }).charge({ on: "2026-08-03", amount: 100, payee: "A Grocer" })
+
+    const page = await dashboard(three, "?filter=all")
+    expect(page.rows[0]?.tagButtons).toEqual(["spend", "recur", "irreg", "xfer", "A", "S", "R"])
+    expect(page.tagColumns).toBe("--tag-buttons: 7; --person-buttons: 3")
+    expect(page.linkFor("Rex")).toBe("/?filter=all&who=rex")
+  })
+
   test("the budget row labels its own figures, for when the header goes away", async () => {
     // Below sm the six columns stack and the header is hidden along with the
     // alignment that gave five of the six figures their meaning; each cell

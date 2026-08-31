@@ -17,7 +17,22 @@ import { CARD, CHECKING, SAVINGS, WALLET } from "../src/test/accounts"
 import { FakeLunchMoneyClient } from "../src/test/fake-client"
 import { aWorld } from "../src/test/world"
 
-const world = aWorld({ today: "2026-08-14" })
+const world = aWorld({
+  today: "2026-08-14",
+  /*
+   * Three people rather than the suite's two, because this is where the
+   * layout gets looked at and two is the number the row used to assume. The
+   * third is a dog, who does not spend money but does have things bought for
+   * him, and whose button is the one that used to fall off the right.
+   */
+  config: {
+    people: [
+      { tag: "alex", label: "Alex", short: "A" },
+      { tag: "sam", label: "Sam", short: "S" },
+      { tag: "rex", label: "Rex", short: "R" },
+    ],
+  },
+})
   .account(CARD, { balance: "2431.55" })
   .account(CHECKING, { balance: "8420.10" })
   .account(SAVINGS, { balance: "15300.00" })

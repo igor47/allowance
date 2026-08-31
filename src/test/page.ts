@@ -44,6 +44,8 @@ export interface Row {
   notCounted: boolean
   /** Which tag buttons are lit. */
   activeTags: string[]
+  /** Every button the row ends in, in order: the four tags, then the people. */
+  tagButtons: string[]
   taggable: boolean
 }
 
@@ -71,6 +73,7 @@ function rowOf(tr: Element): Row {
     activeTags: all(tr, "button.tag-btn")
       .filter((b) => !(b.getAttribute("class") ?? "").includes("btn-outline-secondary"))
       .map((b) => text(b)),
+    tagButtons: all(tr, "button.tag-btn").map((b) => text(b)),
     taggable: all(tr, "button.tag-btn").length > 0,
   }
 }
@@ -202,6 +205,16 @@ export class DashboardPage extends Page {
   /** The empty-state sentence in full, which names the person when there is one. */
   get emptyMessage(): string {
     return text(this.doc.querySelector("#txn-list p.fst-italic"))
+  }
+
+  /**
+   * What the table tells the stylesheet about its own width: how many buttons
+   * a row ends in, and how many of those are people. The layout below 900px
+   * weights the two groups by these, and the column above 900px is sized from
+   * the first — none of which a test can see any other way.
+   */
+  get tagColumns(): string {
+    return this.doc.querySelector(".txn-table")?.getAttribute("style") ?? ""
   }
 
   get chart(): Chart {

@@ -64,7 +64,7 @@ const VIEW_LABEL: Record<View, string> = {
 /**
  * The two you are in most of the time, and the rest a click away.
  *
- * Six views and a couple of people is eight chips, which on a phone was two
+ * Six views and the people is eight chips or more, which on a phone was two
  * ragged rows of something you glance at rather than read. The two that carry a
  * session stay out; the other four go behind a menu — but the menu's button
  * wears the name of whatever is chosen, so nothing is ever selected without
@@ -106,6 +106,16 @@ const TAG_TONE: Record<TagName, { active: string; preview: string }> = {
  * config can hold any number of them.
  */
 const PERSON_TONE = { active: "btn-light", preview: "preview-light" }
+
+/**
+ * How many buttons a row ends in, which is the one thing the stylesheet cannot
+ * work out for itself: the four classifying ones, plus one per person.
+ *
+ * The column width and the flex weights on a phone are all derived from it,
+ * because a household is not two people. Ours has three, one of whom is a dog,
+ * and the layout that assumed two put his button off the right of the row.
+ */
+const classifyingButtons = Object.keys(TAG_TONE).length
 
 const TagButton = ({
   id,
@@ -505,7 +515,11 @@ export const TransactionList = ({
       </p>
     ) : (
       <div class="table-responsive">
-        <table class="table table-sm txn-table align-middle mb-0">
+        {/* See `--tag-buttons` in app.css, and `classifyingButtons` above. */}
+        <table
+          class="table table-sm txn-table align-middle mb-0"
+          style={`--tag-buttons: ${classifyingButtons + people.length}; --person-buttons: ${people.length}`}
+        >
           <tbody>
             {entries.map((entry) => (
               <TransactionRow entry={entry} month={sel.month} people={people} />

@@ -319,7 +319,8 @@
  * fitting:
  *
  *   navbar         brand + two links + username + month + clock ≈ 500px
- *   filter chips   the seven at their natural width are 522px
+ *   filter chips   the seven at their natural width are 522px, and more
+ *                  people only add to that
  *   budget table   min-content 409px — its columns are all short words
  *
  * The transaction table is the exception, and switches at 900px. Its four
@@ -349,8 +350,20 @@
 
 /*
  * Wide enough for the transaction table. Each fixed width is that column's
- * content plus a little: the six buttons measure 208px, "unclassified" is the
- * widest badge, and the description gets whatever is left over.
+ * content plus a little: "unclassified" is the widest badge, and the
+ * description gets whatever is left over.
+ *
+ * The button column is the one that moves, because it holds four classifying
+ * buttons and one per person. `--tag-buttons` is set on the table itself,
+ * being the only place that knows how many people there are; the width is
+ * their `min-width` plus the slack the group needs, which comes to the 18rem
+ * this held while it was written down for two people. A third person widens
+ * the column instead of pushing his own button off the row.
+ *
+ * That does eat into the description at the low end of this regime — the
+ * breakpoint below is measured for six buttons and a media query cannot read
+ * a custom property — but the column is fixed and the text ellipsises, so it
+ * gives up characters rather than overflowing.
  */
 @media (min-width: 900px) {
   .txn-table {
@@ -370,7 +383,7 @@
   }
 
   .txn-table td:nth-child(5) {
-    width: 18rem;
+    width: calc(4.5rem + 2.25rem * var(--tag-buttons, 6));
   }
 }
 
@@ -430,9 +443,13 @@
   }
 
   /*
-   * Capped, because this regime runs to 767px and six buttons spread across
+   * Capped, because this regime runs to 767px and the buttons spread across
    * that much would be a row of enormous targets for a list you scan. Past
    * the cap it stays put at the right, under the amount it belongs to.
+   *
+   * The cap was 26rem for six buttons, so it is 26rem/6 per button now: a
+   * household of three keeps the target size it had with two rather than
+   * dividing the same strip into more, smaller ones.
    */
   .txn-table td:nth-child(5) {
     grid-area: 3 / 1 / 4 / 4;
@@ -449,20 +466,22 @@
      * supposed to fix.
      */
     width: 100%;
-    max-width: 26rem;
+    max-width: calc(var(--tag-buttons, 6) * 26rem / 6);
     justify-self: end;
     /* Set for the desktop column; here the groups may break at 320px. */
     white-space: normal;
   }
 
   /*
-   * All six the same width, always.
+   * Every button the same width, always.
    *
    * `flex: 1 1 auto` split the free space evenly between a group of four and a
-   * group of two, so I and S grew twice as fast as their neighbours as the
+   * group of two, so A and S grew twice as fast as their neighbours as the
    * window widened — narrow at 320px, wider than "spend" by 430px. Weighting
    * each group by how many buttons it holds, over a zero basis, makes every
-   * button one sixth of the row at every width in the regime.
+   * button an equal share of the row at every width in the regime. The people
+   * are weighted by `--person-buttons` for the same reason the column above is
+   * sized by `--tag-buttons`: there may be one of them, or four.
    */
   .txn-table td:nth-child(5) .tag-group {
     flex: 4 1 0;
@@ -471,7 +490,7 @@
   }
 
   .txn-table td:nth-child(5) .tag-group + .tag-group {
-    flex: 2 1 0;
+    flex: var(--person-buttons, 2) 1 0;
   }
 
   .txn-table .tag-group > .tag-btn {

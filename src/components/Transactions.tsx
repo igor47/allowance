@@ -138,6 +138,17 @@ const TagButton = ({
     hx-post={`/transactions/${id}/tag?tag=${tag}${month ? `&month=${month}` : ""}`}
     hx-target="closest tr"
     hx-swap="outerHTML"
+    /*
+     * The rows the summary line is a caption of, sent with every tag.
+     *
+     * The server cannot work them out: the list holds whatever was on screen
+     * when it was last fetched, and tagging deliberately leaves a row in
+     * place after it stops matching the filter — so re-running the filter
+     * would count a different set from the one the reader is looking at.
+     * `#txn-shown` is written by the list itself, which is the only thing
+     * that knows.
+     */
+    hx-include="#txn-shown"
     title={active ? `Remove ${tag}` : `Tag as ${tag}`}
   >
     {label}
@@ -372,6 +383,28 @@ const Chip = ({
  * Always rendered, empty when there is nothing left — htmx cannot swap an
  * element into a page that does not have one to swap.
  */
+/**
+ * The caption over the list, which has to move when a tag does.
+ *
+ * It came back out of band with the row for the same reason the review count
+ * does: a triage session is a sequence of clicks, and a line that only settled
+ * on a full page load spent the session saying $503 against the allowance
+ * while the rows underneath it added up to $90.
+ */
+export const SummaryLine = ({ summary, oob }: { summary: FilterSummary; oob?: boolean }) => (
+  <p id="txn-summary" class="small text-secondary mb-2" {...(oob ? { "hx-swap-oob": "true" } : {})}>
+    <span class="tabular">{summary.count}</span> transaction{summary.count === 1 ? "" : "s"}
+    {summary.excluded > 0 ? (
+      <span title="Transfers and untracked rows, which are in neither figure">
+        {" "}
+        ({summary.excluded} not in the totals)
+      </span>
+    ) : null}{" "}
+    · <span class="tabular">{money(summary.total)}</span> total ·{" "}
+    <span class="tabular">{money(summary.counting)}</span> against the allowance
+  </p>
+)
+
 export const ReviewCount = ({ count, oob }: { count: number; oob?: boolean }) => (
   <span
     id="review-count"
@@ -492,17 +525,18 @@ export const TransactionList = ({
      * next read "$879", and you had to work out whether the rest was excluded
      * or absent.
      */}
-    <p class="small text-secondary mb-2">
-      <span class="tabular">{summary.count}</span> transaction{summary.count === 1 ? "" : "s"}
-      {summary.excluded > 0 ? (
-        <span title="Transfers and untracked rows, which are in neither figure">
-          {" "}
-          ({summary.excluded} not in the totals)
-        </span>
-      ) : null}{" "}
-      · <span class="tabular">{money(summary.total)}</span> total ·{" "}
-      <span class="tabular">{money(summary.counting)}</span> against the allowance
-    </p>
+    <SummaryLine summary={summary} />
+    {/*
+     * What the line above is counting, for the tag route to recount. Rendered
+     * with the list, because the list is what changes the set: a tag swaps a
+     * row in place and leaves the set alone.
+     */}
+    <input
+      type="hidden"
+      id="txn-shown"
+      name="shown"
+      value={entries.map((e) => e.txn.id).join(",")}
+    />
 
     {entries.length === 0 ? (
       // Naming the person matters: with two axes it is easy to land on an

@@ -8,6 +8,7 @@ import { Sync } from "../components/Sync"
 import {
   ReviewCount,
   type Selection,
+  SummaryLine,
   TransactionList,
   TransactionRow,
 } from "../components/Transactions"
@@ -207,6 +208,21 @@ dashboardRoutes.post("/refresh", async (c) => {
   return c.html(<Sync dashboard={dashboard} state={queued ? "queued" : "reloaded"} />)
 })
 
+/**
+ * The ids in the hidden field the list renders, or undefined when there is no
+ * such field in the request. "" is a real answer — a filter with nothing in it
+ * — and is not the same as not having been told.
+ */
+function shownIds(body: Record<string, unknown>): Set<number> | undefined {
+  const raw = body.shown
+  if (typeof raw !== "string") return undefined
+  const ids = raw
+    .split(",")
+    .filter((part) => part !== "")
+    .map((part) => Number.parseInt(part, 10))
+  return ids.some(Number.isNaN) ? undefined : new Set(ids)
+}
+
 /** HTMX partial: swap the transaction list when a filter is clicked. */
 dashboardRoutes.get("/transactions", async (c) => {
   const view = viewOf(c, c.var.today(), c.var.config.historyStart)
@@ -242,6 +258,14 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
     return c.text("unknown tag", 400)
   }
 
+  /*
+   * Which rows the summary line is counting, as the list told the button.
+   * Absent when the post did not come from a rendered list — a test, or a
+   * page from before this shipped — and then the line is left alone rather
+   * than swapped with a figure over the wrong set.
+   */
+  const shown = shownIds(await c.req.parseBody())
+
   const view = viewOf(c, c.var.today(), c.var.config.historyStart)
   const before = await c.var.service.build(view.asOf)
   const target = before.transactions.find((entry) => entry.txn.id === id)
@@ -268,6 +292,17 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
         it started.
       */}
       <ReviewCount count={after.needsReview} oob />
+      {/*
+        The caption over the list moves with them. It counts the rows on
+        screen rather than re-running the filter, because a row that stops
+        matching stays where it is — see `hx-include` on the tag button.
+      */}
+      {shown ? (
+        <SummaryLine
+          summary={summarise(after.transactions.filter((entry) => shown.has(entry.txn.id)))}
+          oob
+        />
+      ) : null}
       <Allowance dashboard={after} />
       <Boxes dashboard={after} />
     </>

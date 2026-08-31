@@ -981,6 +981,40 @@ describe("the summary line", () => {
     const page = await dashboard(august(), "?filter=spending")
     expect(page.summary).not.toContain("not in the totals")
   })
+
+  test("it moves when a tag does, over the rows still on screen", async () => {
+    /*
+     * It is a caption of the list, so it has to come back with the row. It
+     * did not: a click moved the headline number and left this line saying
+     * what the month cost before it, which is the one place on the page where
+     * two figures about the same rows could disagree.
+     *
+     * The count does not fall, because the row does not go anywhere — tagging
+     * leaves it where it is so the click can be seen and undone. Re-running
+     * the filter here would say "2 transactions" over three of them.
+     */
+    const world = august()
+    const session = visit(world)
+    const page = await session.dashboard("?filter=review")
+    // The rent is in the queue too: untagged on a fixed account, so it is
+    // in the total and in neither of the money figures that count.
+    expect(page.summary).toBe("3 transactions · $5,400 total · $400 against the allowance")
+
+    const id = world.transactions.find((t) => t.payee === "A Restaurant")?.id as number
+    const after = await page.tag(id, "recurring")
+    expect(after.swapsOutOfBand).toContain("txn-summary")
+    expect(after.summary).toBe("3 transactions · $5,400 total · $100 against the allowance")
+  })
+
+  test("a tag posted without the list leaves the line alone", async () => {
+    // Nothing said what is on screen, so there is no honest figure to swap
+    // in. Saying nothing beats swapping one counted over the wrong set.
+    const world = august()
+    const id = world.transactions.find((t) => t.payee === "A Restaurant")?.id as number
+    const after = await visit(world).tag(id, "recurring")
+    expect(after.swapsOutOfBand).not.toContain("txn-summary")
+    expect(after.hero).toBe("$2,700")
+  })
 })
 
 describe("transfers in the list", () => {

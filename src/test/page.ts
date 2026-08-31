@@ -195,7 +195,12 @@ export class DashboardPage extends Page {
 
   /** "12 transactions · $340 total · $220 against the allowance". */
   get summary(): string {
-    return text(this.doc.querySelector("#txn-list p.small")).replace(/\s+/g, " ")
+    return text(this.doc.querySelector("#txn-summary")).replace(/\s+/g, " ")
+  }
+
+  /** What the list tells the tag route it is showing, as `hx-include` sends it. */
+  private get shown(): string {
+    return this.doc.querySelector("#txn-shown")?.getAttribute("value") ?? ""
   }
 
   get empty(): boolean {
@@ -247,9 +252,16 @@ export class DashboardPage extends Page {
     return this.session.dashboard(this.withParam("month", month))
   }
 
-  /** Click a tag button. Returns the fragment HTMX would swap in. */
+  /**
+   * Click a tag button. Returns the fragment HTMX would swap in.
+   *
+   * The ids of the rows on screen go with the click, because the button's
+   * `hx-include` sends them — which is what lets the summary line come back
+   * counting the set the reader is looking at. `Session.tag` without them is
+   * the same request made by hand, and gets no summary.
+   */
   tag(id: number, tag: string): Promise<TagResult> {
-    return this.session.tag(id, tag)
+    return this.session.tag(id, tag, "", this.shown)
   }
 }
 
@@ -325,6 +337,11 @@ export class TagResult {
     return text(this.doc.querySelector("#allowance .hero-number"))
   }
 
+  /** The caption over the list, recounted over the rows that are still on it. */
+  get summary(): string {
+    return text(this.doc.querySelector("#txn-summary")).replace(/\s+/g, " ")
+  }
+
   /** The review badge that came back with the row, so the queue can shrink. */
   get reviewCount(): number {
     return Number.parseInt(text(this.doc.querySelector("#review-count")) || "0", 10)
@@ -375,8 +392,15 @@ export class Session {
     )
   }
 
-  async tag(id: number, tag: string, query = ""): Promise<TagResult> {
-    const response = await this.app.post(`/transactions/${id}/tag?tag=${tag}${query}`)
+  async tag(id: number, tag: string, query = "", shown?: string): Promise<TagResult> {
+    const form =
+      shown === undefined
+        ? undefined
+        : {
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ shown }).toString(),
+          }
+    const response = await this.app.post(`/transactions/${id}/tag?tag=${tag}${query}`, form)
     return new TagResult(response.status, await this.doc(response))
   }
 

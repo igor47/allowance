@@ -122,6 +122,11 @@ dashboardRoutes.get("/", async (c) => {
           </a>
         </div>
       )}
+      {c.var.config.warnings.map((warning) => (
+        <div class="alert alert-warning py-2 small" key={warning}>
+          {warning}
+        </div>
+      ))}
       {dashboard.unknownAccounts.length > 0 ? (
         <div class="alert alert-warning py-2 small">
           Not counted — no policy for {dashboard.unknownAccounts.join(", ")}. Add it under

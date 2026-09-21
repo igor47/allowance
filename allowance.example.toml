@@ -17,11 +17,6 @@ daily_target = 75
 # it is past, each month restarts on the 1st.
 period_start = "2026-08-01"
 
-# Positive rollover is capped at this many days of target, applied day by day
-# so a frugal stretch cannot fund one blowout. Overspend carries forward in
-# full — a floor would make the number meaningless.
-rollover_cap_days = 14
-
 # How far back the month picker offers to go. Declared rather than derived: the
 # app cannot ask Lunch Money when the data begins without a wide query against a
 # rate limit that does not welcome one.

@@ -19,7 +19,6 @@ const parse = (toml: string) => parseConfig(Bun.TOML.parse(toml), "test.toml")
 const MINIMAL = `
 daily_target = 200
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-01"
 
 [accounts."Card"]
@@ -33,7 +32,6 @@ describe("a valid config", () => {
     expect(config.allowance).toEqual({
       periodStart: "2026-08-01",
       dailyTarget: 200,
-      rolloverCapDays: 14,
     })
     expect(config.accounts.Card?.policy).toBe("spending")
     expect(statementAccounts(config.accounts)).toEqual([
@@ -67,7 +65,6 @@ statement = { close_day = 3, due_day = 28 }
     const config = parse(`
 daily_target = 200
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-01"
 
 [accounts."Checking"]
@@ -77,13 +74,24 @@ policy = "fixed"
   })
 })
 
+describe("what it warns about", () => {
+  test("nothing, for a config with nothing stale in it", () => {
+    expect(parse(MINIMAL).warnings).toEqual([])
+  })
+
+  test("a leftover rollover cap, rather than letting someone believe they have one", () => {
+    const config = parse(`rollover_cap_days = 14\n${MINIMAL}`)
+    expect(config.warnings).toHaveLength(1)
+    expect(config.warnings[0]).toContain("rollover_cap_days")
+  })
+})
+
 describe("what it refuses", () => {
   test("a misspelled policy, rather than quietly treating it as fixed", () => {
     expect(() =>
       parse(`
 daily_target = 200
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-01"
 
 [accounts."Card"]
@@ -97,7 +105,6 @@ policy = "spendng"
       parse(`
 daily_target = 200
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-01"
 
 [accounts]
@@ -110,7 +117,6 @@ history_start = "2025-01"
       parse(`
 daily_target = 200
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-01"
 
 [accounts."Card"]

@@ -28,8 +28,6 @@ export interface AllowanceConfig {
   periodStart: string
   /** Dollars per day. */
   dailyTarget: number
-  /** Positive rollover is capped at this many days of target. Negative is uncapped. */
-  rolloverCapDays: number
 }
 
 /** Someone a transaction can be attributed to. Orthogonal to the math. */
@@ -74,6 +72,13 @@ export interface Config {
    * with `accounts`, this is what makes `Config` satisfy the domain's `Policy`.
    */
   categories: TransferCategories
+  /**
+   * Things in the file that are not wrong enough to refuse but that the person
+   * who wrote it should hear about — a key that no longer does anything. Shown
+   * on the dashboard, as an unconfigured account is, because the log of a
+   * container is somewhere nobody looks.
+   */
+  warnings: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -236,16 +241,26 @@ export function parseConfig(raw: unknown, source: string): Omit<Config, keyof En
     throw new ConfigError(source, `history_start must be YYYY-MM, got "${historyStart}"`)
   }
 
+  // Said rather than ignored: a file that still sets a cap belongs to someone
+  // who believes they have one. Not refused, because an upgrade should not take
+  // the app down over a line that has merely stopped mattering.
+  const warnings: string[] = []
+  if ("rollover_cap_days" in raw) {
+    warnings.push(
+      "rollover_cap_days no longer does anything — the balance banks all month and resets on the 1st. Remove it from allowance.toml."
+    )
+  }
+
   return {
     allowance: {
       periodStart,
       dailyTarget: num(source, raw, "daily_target"),
-      rolloverCapDays: num(source, raw, "rollover_cap_days"),
     },
     historyStart,
     accounts: accountsOf(source, raw.accounts),
     people: peopleOf(source, raw.people),
     categories: categoriesOf(source, raw.categories),
+    warnings,
   }
 }
 

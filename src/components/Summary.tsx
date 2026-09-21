@@ -99,18 +99,6 @@ export const Allowance = ({ dashboard }: { dashboard: Dashboard }) => {
             </div>
             <div class="small text-secondary mt-2">
               {money(allowance.dailyTarget)}/day &middot; day {allowance.days} of the period
-              {allowance.forfeited > 0 ? (
-                <>
-                  {" "}
-                  &middot;{" "}
-                  <span
-                    id="forfeited"
-                    title={`Banked money lost to the ${allowance.capDays}-day rollover cap`}
-                  >
-                    {money(allowance.forfeited)} forfeited to the cap
-                  </span>
-                </>
-              ) : null}
             </div>
           </div>
           <div class="col-lg-7">

@@ -16,6 +16,8 @@ const config = (() => {
   }
 })()
 
+for (const warning of config.warnings) console.warn(`warning: ${warning}`)
+
 const client = new HttpLunchMoneyClient({ apiKey: config.lunchMoneyApiKey })
 const app = createApp({ client, config })
 

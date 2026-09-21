@@ -41,14 +41,6 @@ describe("dashboard", () => {
     expect(page.title).toBe("allowance · August 2026")
   })
 
-  test("the forfeit tooltip names the configured cap, not a fixed one", async () => {
-    // It used to say "14-day" whatever the config said. Seven days of $200 is
-    // $1,400, so an untouched fortnight loses the other half.
-    const page = await dashboard(aWorld({ today: "2026-08-14" }).allowance({ rolloverCapDays: 7 }))
-    expect(page.hero).toBe("$1,400")
-    expect(page.forfeitedTitle).toBe("Banked money lost to the 7-day rollover cap")
-  })
-
   test("shows cash, the closed statement, and what is accruing", async () => {
     const page = await dashboard(august())
     // The due date moved out of the label and into the detail when the box
@@ -241,6 +233,16 @@ describe("dashboard", () => {
     )
     const page = await dashboard(world)
     expect(page.banners.join(" ")).toContain("no policy for A Savings Account")
+  })
+
+  test("says what the config loader warned about, where someone will see it", async () => {
+    const warning = "rollover_cap_days no longer does anything"
+    const page = await dashboard(aWorld({ today: "2026-08-14", config: { warnings: [warning] } }))
+    expect(page.banners).toContain(warning)
+  })
+
+  test("and says nothing when it did not", async () => {
+    expect((await dashboard(august())).banners).toEqual([])
   })
 })
 
@@ -548,9 +550,8 @@ describe("month picker", () => {
       .charge({ on: "2026-07-20", amount: 300, payee: "A Restaurant" })
     const page = await dashboard(world, "?month=2026-07")
     expect(page.monthLabel).toBe("July 2026")
-    // $6,200 budgeted against $500 spent, so the balance runs into the 14-day
-    // rollover cap: a frugal month cannot bank more than $2,800 of runway.
-    expect(page.hero).toBe("$2,800")
+    // $6,200 budgeted against $500 spent, and all of it banks to the 31st.
+    expect(page.hero).toBe("$5,700")
     expect(page.chart.day(4)).toBe("Sat, Jul 4 · $200 spent")
     expect(page.chart.columns).toBe(31)
     expect((await page.filter("all")).rows.map((r) => r.payee)).toEqual([

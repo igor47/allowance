@@ -31,20 +31,11 @@ describe("rolling balance", () => {
     expect(result.rows[0]?.balance).toBe(-4800)
   })
 
-  test("banked money stops at the cap, and the loss is reported", () => {
-    const result = compute([], "2026-09-20") // 20 days at $200 = $4,000 earned
-    expect(result.cap).toBe(2800)
-    expect(result.balance).toBe(2800)
-    expect(result.forfeited).toBe(1_200)
-  })
-
-  test("the cap applies day by day, so a blowout cannot be pre-funded", () => {
-    // Thirty quiet days would bank $6,000 uncapped, leaving $3,200 after a
-    // $3,000 splurge on day 31. The cap holds the bank to $2,800, so the same
-    // splurge lands at zero instead.
+  test("unspent money banks for the whole month, uncapped", () => {
+    // Thirty quiet days bank $6,000, so a $3,000 splurge on the 31st leaves
+    // $3,200 of the $6,200 month.
     const result = compute([aCharge({ on: "2026-08-31", amount: 3000 })], "2026-08-31")
-    expect(result.balance).toBe(0)
-    expect(result.forfeited).toBe(3200)
+    expect(result.balance).toBe(3200)
   })
 
   test("transactions outside the period are ignored", () => {
@@ -91,9 +82,9 @@ describe("the period is the calendar month", () => {
 
   test("surplus does not bank across the boundary either", () => {
     const august = compute([], "2026-08-31")
-    expect(august.balance).toBe(2800) // capped
+    expect(august.balance).toBe(6200) // the whole month, banked
     const september = compute([], "2026-09-01")
-    expect(september.balance).toBe(200) // one day's target, not 3,000
+    expect(september.balance).toBe(200) // one day's target, not 6,400
   })
 
   test("periodStart floors at the configured date in the first month", () => {

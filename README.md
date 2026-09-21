@@ -6,7 +6,7 @@ A daily spending allowance, computed live from your [Lunch Money](https://lunchm
 
 You get one number: **how much can you spend today, and still remain on-budget**.
 Every day the number goes up by your daily target and down by whatever you spent.
-Unspent money rolls over (up to a cap), overspending carries forward in full, and the whole thing resets on the 1st.
+Unspent money rolls over, overspending carries forward in full, and the whole thing resets on the 1st.
 I wrote about the reasoning [on my blog](https://igor.moomers.org/allowance-budget).
 
 ## Lunch Money
@@ -189,7 +189,6 @@ The example file is commented heavily and is worth reading in full; this section
 ```toml
 daily_target = 75          # dollars per day
 period_start = "2026-08-01" # the day you started; earlier days are ignored
-rollover_cap_days = 14     # unspent money banks up to 14 days' worth
 history_start = "2025-01"  # how far back the month picker goes
 
 [accounts."Chase Sapphire"]
@@ -207,8 +206,8 @@ That is a complete config for one person with a checking account and a credit ca
 
 **The top-level numbers.**
 `daily_target` is the allowance.
-`rollover_cap_days` limits how much unspent allowance you can bank -- a frugal two weeks can fund a nice dinner, but not a vacation.
-Overspending is not capped; if you're $500 in the hole, you're $500 in the hole.
+Unspent money banks for the rest of the month, and overspending carries the same way; if you're $500 in the hole, you're $500 in the hole.
+Both are wiped on the 1st.
 `period_start` is the day the app starts counting, and only matters in its own month.
 `history_start` is the earliest month the month picker offers, since asking the API "when does my data start" would burn through the rate limit.
 
@@ -327,7 +326,6 @@ You have a card each, the paycheck lands in a joint checking account, and you wa
 ```toml
 daily_target = 150
 period_start = "2026-08-01"
-rollover_cap_days = 14
 history_start = "2025-06"
 
 [[people]]

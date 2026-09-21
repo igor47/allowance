@@ -1,10 +1,10 @@
 /**
  * The rolling daily allowance.
  *
- * Each day adds the target and subtracts what was spent. Unspent money banks
- * up to a cap so a frugal stretch cannot fund one blowout; overspend carries
- * forward in full and uncapped, because a floor would make the number stop
- * meaning anything.
+ * Each day adds the target and subtracts what was spent, and both surplus and
+ * overspend carry forward in full until the month ends. There used to be a cap
+ * on the surplus; the month boundary already is one — nothing banks past the
+ * 1st — and one rule is easier to hold in your head than two.
  */
 
 import type { AllowanceConfig } from "../config"
@@ -21,7 +21,7 @@ import {
 export interface DayRow {
   date: IsoDate
   spent: number
-  /** Balance at end of day, after the cap is applied. */
+  /** Balance at end of day. */
   balance: number
 }
 
@@ -56,12 +56,6 @@ export interface AllowanceResult {
   spent: number
   /** What is actually available today. */
   balance: number
-  /** The rollover ceiling. */
-  cap: number
-  /** The same ceiling in days of target, which is how the config states it. */
-  capDays: number
-  /** Banked money lost to the cap over the period. Surfaced, never silent. */
-  forfeited: number
   rows: DayRow[]
 }
 
@@ -94,10 +88,9 @@ export function computeAllowance(
   config: AllowanceConfig,
   today: IsoDate
 ): AllowanceResult {
-  const { dailyTarget, rolloverCapDays } = config
+  const { dailyTarget } = config
   const periodStart = periodStartFor(config, today)
   const periodEnd = endOfMonth(today)
-  const cap = dailyTarget * rolloverCapDays
 
   const spentByDay = new Map<IsoDate, number>()
   let spent = 0
@@ -110,14 +103,9 @@ export function computeAllowance(
 
   const rows: DayRow[] = []
   let balance = 0
-  let forfeited = 0
   for (const date of eachDay(periodStart, today)) {
     const daySpent = spentByDay.get(date) ?? 0
     balance += dailyTarget - daySpent
-    if (balance > cap) {
-      forfeited += balance - cap
-      balance = cap
-    }
     rows.push({ date, spent: daySpent, balance })
   }
 
@@ -131,9 +119,6 @@ export function computeAllowance(
     budget: dailyTarget * days,
     spent,
     balance,
-    cap,
-    capDays: rolloverCapDays,
-    forfeited,
     rows,
   }
 }

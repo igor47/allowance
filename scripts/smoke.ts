@@ -27,7 +27,6 @@ line("Budgeted", money(allowance.budget))
 line("Spent", money(allowance.spent))
 line("Balance", money(allowance.balance))
 line("Actual per day", money(allowance.spent / allowance.days))
-if (allowance.forfeited > 0) line("Forfeited to cap", money(allowance.forfeited))
 
 console.log(`\ncash\n`)
 for (const account of cash.accounts) line(account.name, money(account.balance))

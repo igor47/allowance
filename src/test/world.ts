@@ -47,10 +47,11 @@ export const TEST_CONFIG: Config = {
   cacheTtlSeconds: 0,
   refreshAfterMinutes: 30,
   authUserHeader: "X-authentik-username",
-  allowance: { periodStart: "2026-08-01", dailyTarget: 200, rolloverCapDays: 14 },
+  allowance: { periodStart: "2026-08-01", dailyTarget: 200 },
   historyStart: "2025-01",
   accounts: TEST_ACCOUNTS,
   categories: TEST_CATEGORIES,
+  warnings: [],
   people: [
     { tag: "alex", label: "Alex", short: "A" },
     { tag: "sam", label: "Sam", short: "S" },

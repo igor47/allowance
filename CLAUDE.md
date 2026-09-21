@@ -158,7 +158,7 @@ take a month of spending out of the number and say nothing.
 `src/domain/` holds pure functions of `(transactions, config, today)`:
 
 - `policy.ts` — which transactions count against the allowance
-- `allowance.ts` — the rolling balance and rollover cap
+- `allowance.ts` — the rolling balance, which resets on the 1st
 - `cycle.ts` — credit card statement cycle boundaries
 
 `card.ts` also holds `reconcile()`, which checks the reconstruction against the

@@ -99,15 +99,35 @@ export function cycleTotal(
  *
  *     NewBalance = PreviousBalance − Payments − Credits + Purchases
  *
- * and when the previous balance clears, `NewBalance == Purchases`. The autopay
- * then pays that balance *as of the day it runs* — less any credit that landed
- * between the close and the debit. So:
+ * and when the previous balance clears, `NewBalance == Purchases`. What the
+ * autopay then debits depends on the issuer, and there are two kinds.
+ *
+ * One pays the balance *as of the day it runs* — less any credit that landed
+ * between the close and the debit:
  *
  *     purchases(cycle) + credits posted between the close and the payment
  *       == the payment that settled it
  *
  * Verified against two consecutive real statements, to the penny, including one
  * where a refund landed in the gap and reduced the debit by exactly its amount.
+ *
+ * The other debits the statement balance as printed, whatever has happened
+ * since. This comment used to say the first kind was the only kind. The
+ * counterexample was a second card, from a different issuer, on which two
+ * rewards credits posted three days after the close and the autopay ignored
+ * them: it matched the cycle to the cent without them and was reported as a
+ * discrepancy of exactly their sum. On such a card a credit waits for the
+ * statement it posts in, so
+ *
+ *     purchases(cycle) + credits posted inside the cycle
+ *       == the payment that settled it
+ *
+ * which is `cycleTotal().net`. `reconcile()` accepts either, and says which in
+ * `basis`. Nothing in the feed says which kind a card is, and a config key for
+ * it would be a question nobody can answer until the month it matters. The
+ * price is a second way to agree by accident — an error equal to the cent to
+ * that cycle's credits — which is a fair trade against a warning that fires
+ * every time a refund lands in the gap.
  *
  * Two honest limits. It only means anything while the balance is paid in full —
  * a partial payment carries no information about the bill's size — so a
@@ -135,6 +155,12 @@ export interface Reconciliation {
   billed: number
   /** Credits that landed after the close but before the payment ran. Negative. */
   creditsAfterClose: number
+  /**
+   * Which of the two kinds of issuer `expected` was worked out for: one that
+   * debits the balance as it stands on the day, or one that debits the
+   * statement as it closed. Whichever the payment is nearer to — see above.
+   */
+  basis: "at-debit" | "at-close"
   /** What the autopay should therefore have been. */
   expected: number
   /** What actually left, positive. Null until the payment lands. */
@@ -175,12 +201,14 @@ export function reconcile(
 ): Reconciliation {
   const { account, categories, transfers } = options
   const onCard = txns.filter((t) => accountNameOf(t) === account)
-  const billed = cycleTotal(txns, cycle.start, cycle.end, account, categories, transfers).charges
+  const total = cycleTotal(txns, cycle.start, cycle.end, account, categories, transfers)
+  const billed = total.charges
 
-  const unchecked = {
+  const unchecked: Reconciliation = {
     checkable: false,
     billed,
     creditsAfterClose: 0,
+    basis: "at-debit",
     expected: billed,
     paid: null,
     paidOn: null,
@@ -242,14 +270,21 @@ export function reconcile(
     return amount < 0 ? sum + amount : sum
   }, 0)
 
-  const expected = billed + creditsAfterClose
   // Rounded to the cent, and past negative zero: summing hundreds of decimals
   // leaves a residue that formats as "-$0", which reads as a discrepancy.
-  const delta = (Math.round((expected - paid) * 100) || 0) / 100
+  const off = (expected: number) => (Math.round((expected - paid) * 100) || 0) / 100
+  const atDebit = billed + creditsAfterClose
+  const atClose = total.net
+  // Whichever the issuer's own figure is nearer to. A tie — no credits at all,
+  // almost every month — reads as the first kind, which changes nothing.
+  const basis = Math.abs(off(atClose)) < Math.abs(off(atDebit)) ? "at-close" : "at-debit"
+  const expected = basis === "at-close" ? atClose : atDebit
+  const delta = off(expected)
   return {
     checkable: true,
     billed,
     creditsAfterClose,
+    basis,
     expected,
     paid,
     paidOn,

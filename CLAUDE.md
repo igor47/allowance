@@ -164,6 +164,14 @@ take a month of spending out of the number and say nothing.
 `card.ts` also holds `reconcile()`, which checks the reconstruction against the
 autopay the issuer actually debited — the one figure in the data that did not come
 from us. See its doc comment for why that is a real oracle and not a tautology.
+It accepts two readings of a payment, because issuers differ on whether a
+credit landing after the close reduces the autopay, and nothing in the feed says
+which kind a card is.
+
+`cycle.ts` names a cycle by the month it is **due** in. The due date is the one
+thing every issuer fixes; the close is either a day of the month or a number of
+days before the due date, and only the second can say "the 17th this month, the
+18th next".
 
 These are pure. Keep API shapes, HTTP, and rendering out of them; anything that
 reaches for `fetch` or `Date.now()` directly belongs in a caller, and the

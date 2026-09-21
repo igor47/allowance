@@ -239,6 +239,55 @@ describe("reconciling against the autopay", () => {
     expect(result.agrees).toBe(true)
   })
 
+  test("an issuer that debits the statement as it closed ignores a later credit", () => {
+    // The other kind of issuer. The credit lands in the gap, exactly as above,
+    // and the autopay takes the full statement anyway; the credit waits for the
+    // statement it posted in.
+    const result = reconcile(
+      [
+        aCharge({ on: "2026-07-01", amount: 1000 }),
+        aRefund({ on: "2026-07-20", amount: 65 }),
+        anAutopay({ on: "2026-08-09", amount: 1000 }),
+      ],
+      settled
+    )
+    expect(result.creditsAfterClose).toBe(-65)
+    expect(result.basis).toBe("at-close")
+    expect(result.expected).toBe(1000)
+    expect(result.agrees).toBe(true)
+  })
+
+  test("and on that issuer a credit inside the cycle comes off the statement", () => {
+    const result = reconcile(
+      [
+        aCharge({ on: "2026-07-01", amount: 1000 }),
+        aRefund({ on: "2026-07-05", amount: 200 }),
+        aRefund({ on: "2026-07-20", amount: 65 }),
+        anAutopay({ on: "2026-08-09", amount: 800 }),
+      ],
+      settled
+    )
+    expect(result.basis).toBe("at-close")
+    expect(result.expected).toBe(800)
+    expect(result.agrees).toBe(true)
+  })
+
+  test("a payment that fits neither kind of issuer is still a discrepancy", () => {
+    // Accepting two readings must not mean accepting anything near them.
+    const result = reconcile(
+      [
+        aCharge({ on: "2026-07-01", amount: 1000 }),
+        aRefund({ on: "2026-07-20", amount: 65 }),
+        anAutopay({ on: "2026-08-09", amount: 970 }),
+      ],
+      settled
+    )
+    expect(result.agrees).toBe(false)
+    // Reported against the nearer reading: $30 short of $1,000, not $35 over $935.
+    expect(result.basis).toBe("at-close")
+    expect(result.delta).toBe(30)
+  })
+
   test("a credit inside the cycle is already in the bill, and is not counted twice", () => {
     // The issuer nets a credit posted before the close out of that statement's own
     // balance, so it must not also be subtracted from the payment.

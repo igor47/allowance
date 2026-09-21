@@ -45,7 +45,10 @@ for (const card of cards) {
     `\nstatement ${card.settled.start}..${card.settled.end}, settled ${rec.paidOn ?? "—"}\n`
   )
   line("We reconstructed", money(rec.billed))
-  if (rec.creditsAfterClose !== 0) line("Credits since close", money(rec.creditsAfterClose))
+  if (rec.expected !== rec.billed) {
+    const label = rec.basis === "at-close" ? "Credits in the cycle" : "Credits since close"
+    line(label, money(rec.expected - rec.billed))
+  }
   line("Autopay debited", rec.paid === null ? "not yet" : money(rec.paid))
   if (rec.delta !== null) line("Difference", `${rec.agrees ? "" : "! "}${money(rec.delta)}`)
 }

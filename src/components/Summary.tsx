@@ -41,7 +41,9 @@ export const StatementCheck = ({ dashboard }: { dashboard: Dashboard }) => {
             {shortDate(settled.start)}–{shortDate(settled.end)} statement settled for{" "}
             {cents(rec.paid)} on {shortDate(rec.paidOn ?? settled.due)}, but we reconstructed{" "}
             {cents(rec.billed)} of charges
-            {rec.creditsAfterClose !== 0 ? ` less ${cents(-rec.creditsAfterClose)} of credits` : ""}{" "}
+            {rec.expected !== rec.billed
+              ? ` less ${cents(rec.billed - rec.expected)} of credits`
+              : ""}{" "}
             — a difference of <strong>{cents(Math.abs(rec.delta))}</strong>{" "}
             {rec.delta > 0 ? "less than expected" : "more than expected"}. Either something is
             missing from the feed, or the balance was not paid in full.

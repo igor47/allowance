@@ -375,6 +375,10 @@ A transfer from checking to savings is matched automatically and drops out of bo
 The two cards close on different days, which the summary boxes handle by adding up the money and keeping the dates separate: Due lists a figure per due date rather than averaging two dates into a lie.
 The one thing never added up is the reconciliation, which reports a line per card -- summing them would let a card that's $200 overstated cancel one that's $200 understated and report agreement.
 
+That reconciliation compares what the app says a statement billed against the autopay that settled it, and it allows for the two ways issuers treat a refund that lands after the statement closes.
+Some debit the balance as it stands on the day, so the refund comes off the payment; others debit the statement as printed and carry the refund into the next one.
+Either counts as agreement, so a card from either kind of issuer stays quiet until something is actually missing.
+
 ### Cash and ATM withdrawals
 
 An ATM withdrawal is a debit on the checking account, which is `fixed`, so by default it doesn't count.

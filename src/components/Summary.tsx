@@ -103,7 +103,10 @@ export const Allowance = ({ dashboard }: { dashboard: Dashboard }) => {
                 <>
                   {" "}
                   &middot;{" "}
-                  <span title="Banked money lost to the 14-day rollover cap">
+                  <span
+                    id="forfeited"
+                    title={`Banked money lost to the ${allowance.capDays}-day rollover cap`}
+                  >
                     {money(allowance.forfeited)} forfeited to the cap
                   </span>
                 </>

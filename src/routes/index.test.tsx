@@ -41,6 +41,14 @@ describe("dashboard", () => {
     expect(page.title).toBe("allowance · August 2026")
   })
 
+  test("the forfeit tooltip names the configured cap, not a fixed one", async () => {
+    // It used to say "14-day" whatever the config said. Seven days of $200 is
+    // $1,400, so an untouched fortnight loses the other half.
+    const page = await dashboard(aWorld({ today: "2026-08-14" }).allowance({ rolloverCapDays: 7 }))
+    expect(page.hero).toBe("$1,400")
+    expect(page.forfeitedTitle).toBe("Banked money lost to the 7-day rollover cap")
+  })
+
   test("shows cash, the closed statement, and what is accruing", async () => {
     const page = await dashboard(august())
     // The due date moved out of the label and into the detail when the box

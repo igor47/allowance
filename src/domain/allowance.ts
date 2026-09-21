@@ -58,6 +58,8 @@ export interface AllowanceResult {
   balance: number
   /** The rollover ceiling. */
   cap: number
+  /** The same ceiling in days of target, which is how the config states it. */
+  capDays: number
   /** Banked money lost to the cap over the period. Surfaced, never silent. */
   forfeited: number
   rows: DayRow[]
@@ -130,6 +132,7 @@ export function computeAllowance(
     spent,
     balance,
     cap,
+    capDays: rolloverCapDays,
     forfeited,
     rows,
   }

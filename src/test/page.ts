@@ -226,6 +226,11 @@ export class DashboardPage extends Page {
     return new Chart(this.doc)
   }
 
+  /** The explanation behind "forfeited to the cap", or "" when nothing was. */
+  get forfeitedTitle(): string {
+    return this.doc.querySelector("#forfeited")?.getAttribute("title") ?? ""
+  }
+
   /**
    * Press a chip, following the href the page actually rendered.
    *

@@ -61,6 +61,13 @@ statement = { close_day = 3, due_day = 28 }
     expect(config.people).toEqual([{ tag: "alex", label: "Alex", short: "A" }])
   })
 
+  test("a statement may close a number of days before it is due instead", () => {
+    const config = parse(
+      MINIMAL.replace("close_day = 12, due_day = 9", "close_days_before_due = 25, due_day = 12")
+    )
+    expect(config.accounts.Card?.statement).toEqual({ closeDaysBeforeDue: 25, dueDay: 12 })
+  })
+
   test("a config with no card at all still parses — the allowance does not need one", () => {
     const config = parse(`
 daily_target = 200
@@ -124,6 +131,22 @@ policy = "spending"
 statement = { close_day = 0, due_day = 9 }
 `)
     ).toThrow(/close_day must be a day of the month/)
+  })
+
+  test("a statement that says when it closes twice, or not at all", () => {
+    const needsOne = /exactly one of close_day and close_days_before_due/
+    expect(() =>
+      parse(MINIMAL.replace("close_day = 12", "close_day = 12, close_days_before_due = 25"))
+    ).toThrow(needsOne)
+    expect(() => parse(MINIMAL.replace("close_day = 12, ", ""))).toThrow(needsOne)
+  })
+
+  test("a close that is no days, or too many, before the due date", () => {
+    for (const days of [0, 61, 2.5]) {
+      expect(() =>
+        parse(MINIMAL.replace("close_day = 12", `close_days_before_due = ${days}`))
+      ).toThrow(/close_days_before_due must be a whole number of days/)
+    }
   })
 
   test("a period_start that is a month rather than a date", () => {

@@ -226,6 +226,19 @@ Rent and the card payment come out of it, and both would count.
 Any number of accounts may carry `statement` -- two people usually hold a card each rather than sharing one.
 Those are the cards whose billing cycles drive the summary boxes.
 `close_day` is the day of the month the statement closes and `due_day` is the day of the *following* month the autopay hits.
+
+Some issuers don't close on a fixed day.
+They fix the due date and close a set number of days before it, so the close drifts with the length of the month -- the 17th after a thirty-day month, the 18th after a thirty-one-day one.
+If your statements don't close on the same day every month, say it that way instead:
+
+```toml
+statement = { due_day = 12, close_days_before_due = 25 }
+```
+
+Getting this wrong is quiet.
+It is right most months and a day out in the rest, and the only thing that notices is the statement check, on the month a large charge posts on the day in question.
+A statement takes one or the other, never both.
+
 If you don't have a card, or don't care, leave it off everywhere and the allowance still works.
 
 **Categories.**

@@ -64,7 +64,7 @@ const anAutopay = (options: AutopayOptions) =>
  * the partner is what identifies the row.
  */
 describe("an autopay is recognised by its partner when its category does not say so", () => {
-  const CYCLE = cycleView("2026-08-20", 12, 9).lastClosed
+  const CYCLE = cycleView("2026-08-20", { closeDay: 12, dueDay: 9 }).lastClosed
 
   /** As the feed reports it: card leg a transfer, bank leg the payment. */
   const legs = [
@@ -79,7 +79,7 @@ describe("an autopay is recognised by its partner when its category does not say
   })
 
   test("and reconciliation finds it, rather than reporting it unpaid", () => {
-    const settled = cycleView("2026-08-20", 12, 9).settled
+    const settled = cycleView("2026-08-20", { closeDay: 12, dueDay: 9 }).settled
     // settled is 06-13..07-12, and its autopay runs on the 9th of the month
     // after it closes.
     const paid = [
@@ -173,7 +173,7 @@ describe("reconciling against the autopay", () => {
   const CLOSE = 12
   const DUE = 9
   /** The statement before last — the only one whose payment has run. */
-  const settled = cycleView("2026-08-14", CLOSE, DUE).settled
+  const settled = cycleView("2026-08-14", { closeDay: CLOSE, dueDay: DUE }).settled
 
   test("the settled cycle is the one before the closed one", () => {
     expect(settled).toEqual({ start: "2026-06-13", end: "2026-07-12", due: "2026-08-09" })
@@ -203,7 +203,7 @@ describe("reconciling against the autopay", () => {
      * the due date, which on this card spanned both autopays and summed two
      * statements into one, reporting a discrepancy the size of a month's bill.
      */
-    const longGrace = cycleView("2026-08-30", 5, 10).settled
+    const longGrace = cycleView("2026-08-30", { closeDay: 5, dueDay: 10 }).settled
     expect(longGrace).toEqual({ start: "2026-06-06", end: "2026-07-05", due: "2026-08-10" })
 
     const result = reconcile(

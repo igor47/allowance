@@ -142,9 +142,31 @@ function statementOf(source: string, name: string, raw: unknown): StatementConfi
   if (!isTable(raw)) {
     throw new ConfigError(source, `accounts."${name}".statement must be a table`)
   }
+  const dueDay = dayOfMonth(source, raw, "due_day")
+  // Exactly one way of saying when it closes. Both would be two answers to one
+  // question, and picking a winner is how a config comes to mean something
+  // other than what it says.
+  const fixed = "close_day" in raw
+  const floating = "close_days_before_due" in raw
+  if (fixed === floating) {
+    throw new ConfigError(
+      source,
+      `accounts."${name}".statement needs exactly one of close_day and close_days_before_due`
+    )
+  }
+  if (floating) {
+    const days = num(source, raw, "close_days_before_due")
+    if (!Number.isInteger(days) || days < 1 || days > 60) {
+      throw new ConfigError(
+        source,
+        `close_days_before_due must be a whole number of days from 1 to 60, got ${days}`
+      )
+    }
+    return { closeDaysBeforeDue: days, dueDay }
+  }
   return {
     closeDay: dayOfMonth(source, raw, "close_day"),
-    dueDay: dayOfMonth(source, raw, "due_day"),
+    dueDay,
   }
 }
 

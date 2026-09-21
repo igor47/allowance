@@ -1,15 +1,23 @@
 /**
  * Credit card statement cycles.
  *
- * A card closes on one day of the month and its autopay debits a bank account
- * on another, the following month — the 12th and the 9th, say. That gives two
- * numbers worth showing separately: what is about to leave the checking
- * account, and what is quietly accruing toward the bill after it. Both days
- * come from the card's `statement` block in `allowance.toml`.
+ * A card closes on one day and its autopay debits a bank account on another,
+ * weeks later — the 12th and the following 9th, say. That gives two numbers
+ * worth showing separately: what is about to leave the checking account, and
+ * what is quietly accruing toward the bill after it. Both come from the card's
+ * `statement` block in `allowance.toml`.
+ *
+ * The due date is the fixed point, so a cycle is named here by the month it is
+ * *due* in and its close is worked out from that. This file used to start from
+ * a close day of the month and derive the due date, which cannot express an
+ * issuer that closes a set number of days before the due date — see
+ * `StatementConfig`.
  */
 
+import type { DateTime } from "luxon"
 import type { IsoDate } from "./dates"
 import { addDays, parse } from "./dates"
+import type { StatementConfig } from "./policy"
 
 export interface Cycle {
   /** First day of the cycle, inclusive. */
@@ -42,37 +50,45 @@ function onDay(year: number, month: number, day: number): IsoDate {
   return dt.set({ day: Math.min(day, dt.daysInMonth ?? 28) }).toISODate() as IsoDate
 }
 
-/** The whole cycle implied by the date it closes on. */
-function cycleEndingAt(close: IsoDate, closeDay: number, dueDay: number): Cycle {
-  const closeDt = parse(close)
-  const prior = closeDt.minus({ months: 1 })
-  const dueMonth = closeDt.plus({ months: 1 })
+/** The close of the statement due in `dueMonth`. */
+function closeFor(dueMonth: DateTime, statement: StatementConfig): IsoDate {
+  if ("closeDaysBeforeDue" in statement) {
+    const due = onDay(dueMonth.year, dueMonth.month, statement.dueDay)
+    return addDays(due, -statement.closeDaysBeforeDue)
+  }
+  const prior = dueMonth.minus({ months: 1 })
+  return onDay(prior.year, prior.month, statement.closeDay)
+}
+
+/** The whole cycle due in `dueMonth`: it opens the day after the one before it closed. */
+function cycleDueIn(dueMonth: DateTime, statement: StatementConfig): Cycle {
   return {
-    start: addDays(onDay(prior.year, prior.month, closeDay), 1),
-    end: close,
-    due: onDay(dueMonth.year, dueMonth.month, dueDay),
+    start: addDays(closeFor(dueMonth.minus({ months: 1 }), statement), 1),
+    end: closeFor(dueMonth, statement),
+    due: onDay(dueMonth.year, dueMonth.month, statement.dueDay),
   }
 }
 
-export function cycleView(today: IsoDate, closeDay: number, dueDay: number): CycleView {
-  const now = parse(today)
-  // The most recent close on or before today.
-  let close = onDay(now.year, now.month, closeDay)
-  if (close > today) {
-    const prev = now.minus({ months: 1 })
-    close = onDay(prev.year, prev.month, closeDay)
-  }
-  const lastClosed = cycleEndingAt(close, closeDay, dueDay)
-  const settled = cycleEndingAt(addDays(lastClosed.start, -1), closeDay, dueDay)
-  const next = parse(close).plus({ months: 1 })
+/**
+ * Far enough ahead that the statement due then cannot have closed yet, however
+ * long the grace period: `closeDaysBeforeDue` is held to sixty days by the
+ * config loader, and a fixed close day is always the month before its due date.
+ */
+const MONTHS_AHEAD = 3
 
+export function cycleView(today: IsoDate, statement: StatementConfig): CycleView {
+  // Walk back from the future to the most recent close on or before today.
+  let dueMonth = parse(today).startOf("month").plus({ months: MONTHS_AHEAD })
+  while (closeFor(dueMonth, statement) > today) dueMonth = dueMonth.minus({ months: 1 })
+
+  const lastClosed = cycleDueIn(dueMonth, statement)
   return {
-    settled,
+    settled: cycleDueIn(dueMonth.minus({ months: 1 }), statement),
     lastClosed,
     current: {
-      start: addDays(close, 1),
+      start: addDays(lastClosed.end, 1),
       end: today,
-      closes: onDay(next.year, next.month, closeDay),
+      closes: closeFor(dueMonth.plus({ months: 1 }), statement),
     },
   }
 }

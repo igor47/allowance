@@ -72,6 +72,11 @@ policy = "spending"
 # `close_day` is the day of the month the statement closes; `due_day` is the day
 # of the *following* month the autopay debits. Both clamp on short months, so 31
 # lands on the 28th in February.
+#
+# Some issuers fix the due date and close a set number of days before it, so
+# the close is the 17th one month and the 18th the next. For one of those, say
+#   statement = { due_day = 12, close_days_before_due = 25 }
+# instead. One or the other, never both.
 statement = { close_day = 12, due_day = 9 }
 
 [accounts."Wallet"]

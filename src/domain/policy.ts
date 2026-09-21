@@ -52,13 +52,30 @@ export type AccountPolicy =
   /** Dormant or irrelevant. Never counts, never shown in the review queue. */
   | "ignore"
 
-/** The billing cycle of the one account that has one. */
-export interface StatementConfig {
-  /** Day of the month the statement closes. */
-  closeDay: number
-  /** Day of the *following* month the autopay debits. */
-  dueDay: number
-}
+/**
+ * The billing cycle of a card, said one of the two ways issuers say it.
+ *
+ * Both fix the due date. They differ in what else is fixed. Some issuers close
+ * on the same day every month; others close a set number of days *before the
+ * due date*, so the close drifts with the length of the month — due on the
+ * 12th and closing 25 days earlier is the 17th of a thirty-day month and the
+ * 18th of a thirty-one-day one. Modelling the second kind as the first is
+ * right most months and a day out in the others, and a day is enough to put a
+ * large bill in the wrong statement.
+ */
+export type StatementConfig =
+  | {
+      /** Day of the month the statement closes. */
+      closeDay: number
+      /** Day of the *following* month the autopay debits. */
+      dueDay: number
+    }
+  | {
+      /** How many days before its due date each statement closes. */
+      closeDaysBeforeDue: number
+      /** Day of the month the autopay debits. */
+      dueDay: number
+    }
 
 export interface AccountConfig {
   policy: AccountPolicy

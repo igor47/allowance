@@ -133,7 +133,7 @@ export class DashboardService {
     const cards = statementAccounts(accounts)
     const cycled = cards.map((c) => ({
       ...c,
-      cycles: cycleView(today, c.statement.closeDay, c.statement.dueDay),
+      cycles: cycleView(today, c.statement),
     }))
     /*
      * How far back the one fetch has to reach: far enough for every card's

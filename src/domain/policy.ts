@@ -482,8 +482,13 @@ export function classify(
    *
    * This is the same delegation the `[categories]` lists already make, on
    * better evidence: a category rule matches a payee, whereas a recurring link
-   * means Lunch Money reconciled payee, amount and an expected occurrence date
-   * against an item somebody set up on purpose. Without it the household
+   * means Lunch Money matched payee and amount against an item somebody
+   * accepted on purpose. That last part is the client's doing, not the feed's:
+   * the wire field also links rows to items Lunch Money only *suggested*, and
+   * a transit fare charged at one price twice a month was enough to take every
+   * matching fare out of the count. `hydrate()` drops those links. Nor is the
+   * date part of the match — the same suggestion claimed fares on eight
+   * different days against one expected date. Without it the household
    * re-tags the same insurance premium every month forever, on a card where
    * untagged means discretionary — which is the state the demo account is in.
    *

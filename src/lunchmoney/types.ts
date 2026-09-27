@@ -31,11 +31,14 @@ export interface LmTransaction {
   /**
    * The recurring item Lunch Money has linked this transaction to, if any.
    *
-   * Their matcher sets it when a row agrees with an item on payee, amount and
-   * an expected occurrence date — which is a stronger claim than any of the
+   * Their matcher sets it when a row agrees with an item on payee and amount
+   * — not on date, which it does not check — a stronger claim than any of the
    * category rules in `[categories]`, and unlike them it needs no
    * configuration at all. `classify()` reads it so a subscription does not
    * have to be tagged again every month.
+   *
+   * Only a link to a *reviewed* item survives hydration. The wire field also
+   * points at items Lunch Money merely suggested, which is no plan at all.
    */
   recurring_id: number | null
   /** Plaid's raw payload as a JSON string. See details.ts. */

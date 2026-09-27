@@ -86,8 +86,10 @@ migration.
 v2 **de-hydrates** the transaction. Category name, `is_income`,
 `exclude_from_totals`, the account display name and the tags are all gone from
 it, replaced by ids; the client fetches `/categories`, `/tags`,
-`/plaid_accounts` and `/manual_accounts` once, holds them for fifteen minutes,
-and joins them back. `plaidAccounts()` deliberately does *not* use that cache —
+`/plaid_accounts`, `/manual_accounts` and `/recurring_items` once, holds them
+for fifteen minutes, and joins them back. The last is there for one reason:
+`recurring_id` also points at items Lunch Money merely *suggested*, which its
+UI shows no link for, so the client keeps only links to reviewed items. `plaidAccounts()` deliberately does *not* use that cache —
 the freshness clock and the cash figures are built from it.
 
 Three things that will catch you out:

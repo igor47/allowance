@@ -26,7 +26,8 @@ const BASE = "https://api.lunchmoney.dev/v2/"
 const PAGE_SIZE = 500
 
 /**
- * Categories, accounts and tags are small, stable, and needed on every read.
+ * Categories, accounts, tags and which recurring items were accepted are
+ * small, stable, and needed on every read.
  * Holding them briefly turns one dashboard build back into one transaction
  * fetch rather than five requests.
  */
@@ -55,11 +56,17 @@ export interface HttpClientOptions {
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** Everything needed to turn a de-hydrated transaction back into a whole one. */
-interface Lookups {
+export interface Lookups {
   categories: Map<number, V2Category>
   tags: Map<number, LmTag>
   plaid: Map<number, V2PlaidAccount>
   manual: Map<number, V2ManualAccount>
+  /**
+   * The recurring items somebody accepted. A transaction's `recurring_id` can
+   * point at one Lunch Money merely *suggested*, which its own UI does not
+   * show as a link — see `hydrate()`.
+   */
+  reviewedRecurring: Set<number>
 }
 
 export class HttpLunchMoneyClient implements LunchMoneyClient {
@@ -123,11 +130,14 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
   }
 
   private async fetchJoinTables(): Promise<Lookups> {
-    const [categories, tags, plaid, manual] = await Promise.all([
+    const [categories, tags, plaid, manual, recurring] = await Promise.all([
       this.request<{ categories: V2Category[] }>("categories"),
       this.request<{ tags: V2Tag[] }>("tags"),
       this.request<{ plaid_accounts: V2PlaidAccount[] }>("plaid_accounts"),
       this.request<{ manual_accounts: V2ManualAccount[] }>("manual_accounts"),
+      // The list leaves suggested items out by default; the status is checked
+      // anyway, so that a change to that default cannot quietly undo this.
+      this.request<{ recurring_items: V2RecurringItem[] }>("recurring_items"),
     ])
     return {
       categories: byId(categories.categories),
@@ -139,6 +149,9 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
       ),
       plaid: byId(plaid.plaid_accounts),
       manual: byId(manual.manual_accounts),
+      reviewedRecurring: new Set(
+        recurring.recurring_items.filter((r) => r.status === "reviewed").map((r) => r.id)
+      ),
     }
   }
 
@@ -310,6 +323,25 @@ function toManualAccount(a: V2ManualAccount): LmAccount {
 }
 
 /**
+ * The recurring link, but only to an item somebody accepted.
+ *
+ * Lunch Money's matcher also links rows to items it merely *suggested* —
+ * `status: "suggested"`, `source: "system"` — and its own UI shows no link
+ * for those. A transit card tapped at the same fare twice in one month was
+ * enough to get a suggestion, and every fare matching it then left the
+ * allowance as "recurring" with nothing in Lunch Money to say why. Dropping
+ * the link sends such a row back through the ordinary rules, where it counts.
+ *
+ * A reviewed item missing from the list — one that has since ended, say —
+ * loses its link the same way. That is wrong small: the row counts and asks
+ * for a tag, rather than vanishing.
+ */
+function linkedRecurring(txn: V2Transaction, lookups: Lookups): number | null {
+  const id = txn.recurring_id
+  return id !== null && lookups.reviewedRecurring.has(id) ? id : null
+}
+
+/**
  * A de-hydrated transaction, made whole again.
  *
  * The two account fields are set the way v1 set them — `plaid_*` for a linked
@@ -330,7 +362,7 @@ export function hydrate(txn: V2Transaction, lookups: Lookups): LmTransaction {
     date: txn.date,
     amount: txn.amount,
     currency: txn.currency,
-    recurring_id: txn.recurring_id,
+    recurring_id: linkedRecurring(txn, lookups),
     payee: txn.payee,
     original_name: txn.original_name,
     category_name: category?.name ?? null,

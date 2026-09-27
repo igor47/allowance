@@ -21,16 +21,16 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
       - run: mise run setup
       - run: mise run check
 
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
       - run: mise run setup
       # Offline by construction: nothing under src/ knows how to reach the
       # network, so this cannot touch the Lunch Money API even by accident.
@@ -45,12 +45,12 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `main` publishes :main and :sha-<commit>; a v* tag publishes the
       # version and :latest. Deployments should pin a version tag — a bad
       # release ought to require a deliberate redeploy, not a restart.
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
@@ -61,15 +61,15 @@ jobs:
             type=sha,prefix=sha-
           flavor: latest=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true

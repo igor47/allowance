@@ -699,6 +699,19 @@ describe("budget page", () => {
     expect(mortgage?.dueThisPeriod).toBe("$1,500")
   })
 
+  test("gives every figure per day as well, since that is how it gets spent", async () => {
+    const page = await visit(withAPlan()).budget()
+    // Over August's 31 days: $10,000 in, $1,620 committed.
+    expect(page.summary).toContain("$323/day")
+    expect(page.summary).toContain("$52/day")
+    const mortgage = page.rates.find((r) => r.payee === "Mortgage")
+    expect(mortgage?.perDay).toBe("$48")
+    // Twenty dollars a month is under a dollar a day, and "$1" would round
+    // it up while "$0" would call it free.
+    const streaming = page.rates.find((r) => r.payee === "A Streaming Service")
+    expect(streaming?.perDay).toBe("<$1")
+  })
+
   test("stays quiet in an ordinary month, where the two figures agree", async () => {
     // Most months land within a few dollars of the steady rate, and a second
     // total that close to the first is noise dressed as information.
@@ -804,8 +817,8 @@ describe("phone layout", () => {
   })
 
   test("the budget row labels its own figures, for when the header goes away", async () => {
-    // Below sm the six columns stack and the header is hidden along with the
-    // alignment that gave five of the six figures their meaning; each cell
+    // Below sm the seven columns stack and the header is hidden along with the
+    // alignment that gave five of the figures their meaning; each cell
     // draws its own `data-label` instead. They must keep saying what the
     // headers say, and there is nothing in the CSS to notice when they drift.
     const page = await visit(august().subscription({ payee: "A Gym", amount: 100 })).budget()
@@ -815,8 +828,8 @@ describe("phone layout", () => {
     const labels = Array.from(page.doc.querySelectorAll("#budget tbody tr:first-child td")).map(
       (td) => td.getAttribute("data-label")
     )
-    // Item and State say themselves; the four in between do not.
-    expect(labels).toEqual([null, ...headers.slice(1, 5), null])
+    // Item and State say themselves; the five in between do not.
+    expect(labels).toEqual([null, ...headers.slice(1, 6), null])
   })
 
   test("an unlit tag button promises the colour it will become", async () => {

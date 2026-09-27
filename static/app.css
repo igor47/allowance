@@ -570,6 +570,7 @@
  *   Cadence                                         monthly
  *   Each                                             $3,400
  *   Per month                                             —
+ *   Per day                                            $110
  *   Due this month                             $3,400 8/10
  *
  * These rows are a handful per page, unlike the transaction list, so the
@@ -616,7 +617,7 @@
     display: block;
   }
 
-  .budget-table td:nth-child(6) {
+  .budget-table td:nth-child(7) {
     grid-area: 1 / 2;
   }
 
@@ -634,5 +635,55 @@
 
   .budget-table td:nth-child(5) {
     grid-area: 5 / 1 / 6 / 3;
+  }
+
+  .budget-table td:nth-child(6) {
+    grid-area: 6 / 1 / 7 / 3;
+  }
+}
+
+/*
+ * The budget summary, as a sum: income − committed ⇒ allowance.
+ *
+ * The terms share the width and the operators take only what they need. The
+ * answer gets a little more room, since it carries the hero number.
+ */
+/* Top-aligned, so the three labels share a line however tall a term is. */
+.budget-sum {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.budget-term {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.budget-answer {
+  flex-grow: 1.4;
+}
+
+/* Level with the first figure under each label. */
+.budget-op {
+  font-size: 1.75rem;
+  line-height: 1;
+  padding-top: 1.1rem;
+}
+
+/* A phone stacks the terms, and the operators stay between them. */
+@media (max-width: 575.98px) {
+  .budget-sum {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .budget-op {
+    padding-top: 0;
+  }
+
+  .budget-term {
+    flex-basis: auto;
   }
 }

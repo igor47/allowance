@@ -8,7 +8,7 @@
  */
 
 import type { BudgetView, Commitment, CommitmentState } from "../domain/budget"
-import { money, shortDate } from "./format"
+import { money, perDay, shortDate } from "./format"
 
 export interface BudgetProps {
   budget: BudgetView
@@ -31,7 +31,7 @@ const STATE: Record<CommitmentState, { label: string; class: string; note: strin
   },
 }
 
-const Row = ({ c }: { c: Commitment }) => {
+const Row = ({ c, days }: { c: Commitment; days: number }) => {
   const state = STATE[c.state]
   return (
     <tr>
@@ -52,6 +52,13 @@ const Row = ({ c }: { c: Commitment }) => {
         ) : (
           money(c.monthly)
         )}
+      </td>
+      <td class="text-end tabular" data-label="Per day">
+        {/*
+          The monthly rate over this month's days, so the column adds up to
+          the per-day figure in the summary above it.
+        */}
+        {perDay(c.monthly / days)}
       </td>
       <td class="text-end tabular" data-label="Due this month">
         {/*
@@ -83,13 +90,13 @@ const Row = ({ c }: { c: Commitment }) => {
   )
 }
 
-const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
+const Table = ({ rows, caption, days }: { rows: Commitment[]; caption: string; days: number }) =>
   rows.length === 0 ? null : (
     <div class="card border-secondary-subtle mb-3">
       <div class="card-body">
         <h2 class="h6 stat-label text-secondary mb-3">{caption}</h2>
         {/*
-          Six columns do not fit on a phone, so below sm `.budget-table` stacks
+          Seven columns do not fit on a phone, so below sm `.budget-table` stacks
           the row and the header goes away with the alignment it described —
           which is what the `data-label` on each cell is for. See app.css.
         */}
@@ -101,13 +108,14 @@ const Table = ({ rows, caption }: { rows: Commitment[]; caption: string }) =>
                 <th>Cadence</th>
                 <th class="text-end">Each</th>
                 <th class="text-end">Per month</th>
+                <th class="text-end">Per day</th>
                 <th class="text-end">Due this month</th>
                 <th class="text-end">State</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((c) => (
-                <Row key={c.id} c={c} />
+                <Row key={c.id} c={c} days={days} />
               ))}
             </tbody>
           </table>
@@ -138,70 +146,77 @@ export const Budget = ({ budget, configuredTarget }: BudgetProps) => {
     <div id="budget">
       <div class="card border-secondary-subtle mb-3">
         <div class="card-body">
-          <div class="row align-items-center g-4">
-            <div class="col-lg-5">
-              <div class="stat-label text-secondary mb-2">Allowance this implies</div>
-              <div class="hero-number">{money(totals.dailyTarget)}</div>
-              <div class="small text-secondary mt-2">
-                per day &middot; {money(totals.pool)} left over {budget.days} days
-                {Math.abs(drift) >= 1 ? (
-                  <>
-                    {" "}
-                    &middot;{" "}
-                    <span class={drift < 0 ? "text-warning" : "text-success"}>
-                      {money(Math.abs(drift))}/day {drift < 0 ? "under" : "over"} the{" "}
-                      {money(configuredTarget)} in use
-                    </span>
-                  </>
-                ) : (
-                  <> &middot; matches the {money(configuredTarget)} in use</>
-                )}
+          {/*
+            Written as the sum it is — income, minus what is committed, gives
+            the allowance — so the page reads left to right as the derivation
+            it exists to show, and the answer sits where a sum's answer goes.
+
+            Every term carries both units. The month is what the plan is made
+            of and the day is what gets spent, so the two outer terms lead
+            with the month and the answer leads with the day, each with the
+            other underneath. On a phone the terms stack and the operators
+            stay between them.
+          */}
+          <div class="budget-sum text-center">
+            <div class="budget-term">
+              <div class="stat-label text-secondary">Income</div>
+              <div class="fs-5 tabular text-success">{money(totals.income)}</div>
+              <div class="small text-secondary tabular">
+                {perDay(totals.income / budget.days)}/day
               </div>
             </div>
-            <div class="col-lg-7">
+            <div class="budget-op text-secondary" aria-hidden="true">
+              −
+            </div>
+            <div class="budget-term">
+              <div class="stat-label text-secondary">Committed</div>
+              <div class="fs-5 tabular">{money(totals.committed)}</div>
+              <div class="small text-secondary tabular">
+                {perDay(totals.committed / budget.days)}/day
+              </div>
               {/*
-                One per line on a phone. Three columns of a 390px screen leave
-                about 110px each, which is narrower than "$4,865 due Aug" — the
-                two detail lines under Committed wrapped mid-phrase, and a
-                figure split across two lines reads as two figures.
+                The headline stays amortised, because a daily allowance
+                should not lurch when an annual bill happens to land this
+                month. This says what actually leaves, which is the other
+                question worth asking and a different number.
               */}
-              <div class="row row-cols-1 row-cols-sm-3 g-3 text-center">
-                <div>
-                  <div class="stat-label text-secondary">Income</div>
-                  <div class="fs-5 tabular text-success">{money(totals.income)}</div>
+              {totals.committedThisPeriod !== null && lumpy ? (
+                <div
+                  class="small text-secondary"
+                  title="What actually lands this month, rather than the steady monthly rate"
+                >
+                  {money(totals.committedThisPeriod)} due {monthName}
                 </div>
-                <div>
-                  <div class="stat-label text-secondary">Committed</div>
-                  <div class="fs-5 tabular">{money(totals.committed)}</div>
-                  {/*
-                    The headline stays amortised, because a daily allowance
-                    should not lurch when an annual bill happens to land this
-                    month. This says what actually leaves, which is the other
-                    question worth asking and a different number.
-                  */}
-                  {totals.committedThisPeriod !== null && lumpy ? (
-                    <div
-                      class="small text-secondary"
-                      title="What actually lands this month, rather than the steady monthly rate"
-                    >
-                      {money(totals.committedThisPeriod)} due {monthName}
-                    </div>
-                  ) : null}
-                  {totals.untracked > 0 ? (
-                    <div
-                      class="small text-secondary"
-                      title="On accounts with no transaction feed — real money that never appears as a transaction"
-                    >
-                      {money(totals.untracked)} untracked
-                    </div>
-                  ) : null}
+              ) : null}
+              {totals.untracked > 0 ? (
+                <div
+                  class="small text-secondary"
+                  title="On accounts with no transaction feed — real money that never appears as a transaction"
+                >
+                  {money(totals.untracked)} untracked
                 </div>
-                <div>
-                  <div class="stat-label text-secondary">Left to spend</div>
-                  <div class={`fs-5 tabular ${totals.pool < 0 ? "text-danger" : ""}`}>
-                    {money(totals.pool)}
-                  </div>
-                </div>
+              ) : null}
+            </div>
+            <div class="budget-op text-secondary" aria-hidden="true">
+              ⇒
+            </div>
+            <div class="budget-term budget-answer">
+              <div class="stat-label text-secondary">Allowance this implies</div>
+              <div class={`hero-number ${totals.pool < 0 ? "text-danger" : ""}`}>
+                {money(totals.dailyTarget)}
+              </div>
+              <div class="small text-secondary tabular mt-1">
+                per day &middot; {money(totals.pool)} over {budget.days} days
+              </div>
+              <div class="small text-secondary mt-1">
+                {Math.abs(drift) >= 1 ? (
+                  <span class={drift < 0 ? "text-warning" : "text-success"}>
+                    {money(Math.abs(drift))}/day {drift < 0 ? "under" : "over"} the{" "}
+                    {money(configuredTarget)} in use
+                  </span>
+                ) : (
+                  <>matches the {money(configuredTarget)}/day in use</>
+                )}
               </div>
             </div>
           </div>
@@ -216,8 +231,8 @@ export const Budget = ({ budget, configuredTarget }: BudgetProps) => {
         </div>
       ) : null}
 
-      <Table rows={budget.income} caption="Income" />
-      <Table rows={budget.commitments} caption="Committed" />
+      <Table rows={budget.income} caption="Income" days={budget.days} />
+      <Table rows={budget.commitments} caption="Committed" days={budget.days} />
     </div>
   )
 }

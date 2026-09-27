@@ -560,6 +560,23 @@ describe("transfers between accounts we own", () => {
     expect(out?.bucket).toBe("transfer")
   })
 
+  test("a transfer tag on a matched leg confirms it, and still names the partner", () => {
+    const rows = aTransfer({
+      on: "2026-08-10",
+      amount: 400,
+      from: CHECKING,
+      to: SAVINGS,
+      toTags: ["transfer"],
+    })
+    const [out, into] = verdicts(rows)
+    expect(into?.bucket).toBe("transfer")
+    expect(into?.reviewed).toBe(true)
+    expect(into?.restated).toBe(false)
+    expect(into?.reason).toContain(CHECKING)
+    // The tag speaks for its own row only.
+    expect(out?.reviewed).toBe(false)
+  })
+
   test("the card autopay is matched structurally, as well as by payee", () => {
     const legs = [
       anAutopay({ on: "2026-08-09", amount: 9000 }),

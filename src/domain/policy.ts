@@ -437,7 +437,12 @@ export function classify(
   const paired = transfers?.get(txn.id)
   if (paired && !tags.includes(TAG.spending)) {
     const other = paired.counterpart
-    return TRANSFER(`the other leg is on ${accountNameOf(other)}, ${other.date}`, amount)
+    const reason = `the other leg is on ${accountNameOf(other)}, ${other.date}`
+    // A person who tagged the leg `transfer` has confirmed the match, and the
+    // pill has to say so: the button was lit while the pill stayed outlined.
+    // The partner is still worth naming, so the reason is not a restatement.
+    if (tags.includes(TAG.transfer)) return { ...TRANSFER(reason, amount, true), restated: false }
+    return TRANSFER(reason, amount)
   }
 
   // An explicit tag beats every payee heuristic below, and Lunch Money's own

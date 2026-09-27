@@ -257,10 +257,11 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
   try {
     action = parseTagAction(
       c.req.query("tag") ?? "",
-      c.var.config.people.map((p) => p.tag)
+      c.var.config.people.map((p) => p.tag),
+      c.req.query("set")
     )
-  } catch {
-    return c.text("unknown tag", 400)
+  } catch (e) {
+    return c.text((e as Error).message, 400)
   }
 
   /*

@@ -135,9 +135,16 @@ const TagButton = ({
   <button
     type="button"
     class={`btn tag-btn ${active ? tone.active : `btn-outline-secondary ${tone.preview}`}`}
-    hx-post={`/transactions/${id}/tag?tag=${tag}${month ? `&month=${month}` : ""}`}
+    // The state wanted rather than "toggle", so a repeated click is harmless.
+    hx-post={`/transactions/${id}/tag?tag=${tag}&set=${active ? "off" : "on"}${month ? `&month=${month}` : ""}`}
     hx-target="closest tr"
     hx-swap="outerHTML"
+    // One tag write per row at a time. Every button on the row was drawn from
+    // the same state, so a second click before the row comes back would be
+    // computed from a picture that is about to change; it is dropped, and the
+    // indicator dims the whole row so the drop is visible rather than silent.
+    hx-sync="closest tr:drop"
+    hx-indicator="closest tr"
     /*
      * The rows the summary line is a caption of, sent with every tag.
      *

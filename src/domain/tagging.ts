@@ -13,12 +13,21 @@
 
 import { CLASSIFYING_TAGS } from "./policy"
 
-export type TagAction = { kind: "classify" | "person"; tag: string }
+/**
+ * `want` is the state the button asked for, which is what makes a click safe
+ * to repeat. A toggle computed on the server meant a second click, sent while
+ * the first was still in flight, found the tag already on and took it off
+ * again — the row "unclicked itself". Absent only from a page rendered before
+ * buttons said which way they meant, and then the click toggles as it did.
+ */
+export type TagAction = { kind: "classify" | "person"; tag: string; want?: boolean }
 
-export function parseTagAction(tag: string, personTags: string[]): TagAction {
+export function parseTagAction(tag: string, personTags: string[], set?: string): TagAction {
   const name = tag.toLowerCase()
-  if (CLASSIFYING_TAGS.includes(name)) return { kind: "classify", tag: name }
-  if (personTags.includes(name)) return { kind: "person", tag: name }
+  const want = set === undefined ? undefined : set === "on" ? true : set === "off" ? false : null
+  if (want === null) throw new Error(`unknown state: ${set}`)
+  if (CLASSIFYING_TAGS.includes(name)) return { kind: "classify", tag: name, want }
+  if (personTags.includes(name)) return { kind: "person", tag: name, want }
   // Refusing an unknown tag is what keeps `/tag/:id/:tag` from writing
   // arbitrary strings into Lunch Money from a hand-typed URL.
   throw new Error(`unknown tag: ${tag}`)
@@ -26,13 +35,14 @@ export function parseTagAction(tag: string, personTags: string[]): TagAction {
 
 export function nextTags(current: string[], action: TagAction): string[] {
   const tags = current.map((t) => t.toLowerCase())
-  const has = tags.includes(action.tag)
+  const on = action.want ?? !tags.includes(action.tag)
+  const without = tags.filter((t) => t !== action.tag)
 
-  if (action.kind === "person") {
-    return has ? tags.filter((t) => t !== action.tag) : [...tags, action.tag]
-  }
+  // Turning a tag off removes that tag and nothing else. For a classifying
+  // one that is usually all there is, but "spending off" arriving after the
+  // row was re-tagged `recurring` must not take the `recurring` with it.
+  if (!on || action.kind === "person") return on ? [...without, action.tag] : without
 
-  // Drop every classifying tag, then re-add unless this was a toggle-off.
-  const kept = tags.filter((t) => !CLASSIFYING_TAGS.includes(t))
-  return has ? kept : [...kept, action.tag]
+  // Turning one on displaces every other classifying tag.
+  return [...tags.filter((t) => !CLASSIFYING_TAGS.includes(t)), action.tag]
 }

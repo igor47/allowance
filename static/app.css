@@ -206,6 +206,8 @@
   }
 }
 
+/* A tag write names the row as its indicator, so the whole row's buttons dim
+   while it is in flight — the clicks `hx-sync` drops are then visibly off. */
 .htmx-request .tag-group {
   opacity: 0.4;
 }
@@ -276,8 +278,7 @@
 
 /* Any in-flight control dims, so a click feels acknowledged before the
    round trip finishes. */
-.htmx-request.tag-btn,
-.htmx-request .tag-btn {
+.htmx-request.tag-btn {
   opacity: 0.45;
 }
 

@@ -281,6 +281,18 @@ describe("tagging", () => {
     expect(result.row?.badge).toBe("spending")
   })
 
+  test("a click that arrives twice does not undo itself", async () => {
+    // Each button says which way it means, so the second of a double click —
+    // sent before the first came back — asks for the same thing again.
+    const world = august()
+    const id = anUntaggedCharge(world)
+    const session = visit(world)
+    await session.tag(id, "recurring", "&set=on")
+    const result = await session.tag(id, "recurring", "&set=on")
+    expect(session.client.writes.at(-1)?.tags).toEqual(["recurring"])
+    expect(result.row?.badge).toBe("recurring")
+  })
+
   test("classifying tags are mutually exclusive", async () => {
     const world = august()
     const session = visit(world)

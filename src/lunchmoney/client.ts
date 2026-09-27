@@ -235,34 +235,40 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
    * as v1 did — so a name with no tag behind it has to become one first.
    */
   async setTags(transactionId: number, tags: string[]): Promise<void> {
-    const ids = await this.tagIdsFor(tags)
+    const { ids, created } = await this.tagIdsFor(tags)
     await this.request(`transactions/${transactionId}`, {
       method: "PUT",
       body: JSON.stringify({ tag_ids: ids }),
     })
-    // The next read must see the new tag, and a stale table would hide it.
-    this.lookups = null
+    // A tag made just now is missing from the held table, and the next read
+    // would hydrate it as nothing. Only then is the table worth dropping: it
+    // is five requests to rebuild, and dropping it on every click put a
+    // triage session over the rate limit, where each click then sat out a
+    // 429 backoff looking as if it had not registered.
+    if (created) this.lookups = null
   }
 
-  private async tagIdsFor(names: string[]): Promise<number[]> {
-    if (names.length === 0) return []
+  private async tagIdsFor(names: string[]): Promise<{ ids: number[]; created: boolean }> {
+    if (names.length === 0) return { ids: [], created: false }
     const existing = new Map(
       [...(await this.joinTables()).tags.values()].map((t) => [t.name.toLowerCase(), t.id])
     )
     const ids: number[] = []
+    let created = false
     for (const name of names) {
       const hit = existing.get(name.toLowerCase())
       if (hit !== undefined) {
         ids.push(hit)
         continue
       }
-      const created = await this.request<{ tag: V2Tag } | V2Tag>("tags", {
+      const made = await this.request<{ tag: V2Tag } | V2Tag>("tags", {
         method: "POST",
         body: JSON.stringify({ name }),
       })
-      ids.push("tag" in created ? created.tag.id : created.id)
+      ids.push("tag" in made ? made.tag.id : made.id)
+      created = true
     }
-    return ids
+    return { ids, created }
   }
 }
 

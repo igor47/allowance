@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test"
-import { hydrate, type Lookups } from "./client"
+import { afterEach, describe, expect, test } from "bun:test"
+import { HttpLunchMoneyClient, hydrate, type Lookups } from "./client"
 import type { V2Transaction } from "./v2"
 
 const REVIEWED = 7
@@ -46,5 +46,64 @@ describe("the recurring link", () => {
 
   test("stays absent when there was none", () => {
     expect(hydrate(fare(null), lookups).recurring_id).toBeNull()
+  })
+})
+
+/**
+ * An in-memory Lunch Money behind `fetch`, counting what it is asked. Nothing
+ * here reaches the network: the stub answers every path the client requests.
+ */
+function stubbedApi(tags: { id: number; name: string }[]) {
+  const asked: string[] = []
+  let nextId = 100
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const path = String(input).replace("https://api.lunchmoney.dev/v2/", "")
+    const method = init?.method ?? "GET"
+    asked.push(`${method} ${path}`)
+    const json = (body: unknown) => new Response(JSON.stringify(body))
+    if (method === "POST" && path === "tags") {
+      const { name } = JSON.parse(String(init?.body))
+      const tag = { id: nextId++, name }
+      tags.push(tag)
+      return json(tag)
+    }
+    if (method === "PUT") return json({})
+    const empty: Record<string, unknown> = {
+      categories: { categories: [] },
+      tags: { tags },
+      plaid_accounts: { plaid_accounts: [] },
+      manual_accounts: { manual_accounts: [] },
+      recurring_items: { recurring_items: [] },
+    }
+    return json(empty[path])
+  }) as typeof fetch
+  return asked
+}
+
+describe("tagging", () => {
+  const realFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  // Dropping the join tables after every write made each click cost five
+  // extra requests, which a triage session turned into 429 backoffs.
+  test("a tag that already exists costs one request after the first", async () => {
+    const asked = stubbedApi([{ id: 1, name: "spending" }])
+    const client = new HttpLunchMoneyClient({ apiKey: "test" })
+    await client.setTags(10, ["spending"])
+    asked.length = 0
+    await client.setTags(11, ["spending"])
+    expect(asked).toEqual(["PUT transactions/11"])
+  })
+
+  test("a tag made just now is read back, so the tables are fetched again", async () => {
+    const asked = stubbedApi([])
+    const client = new HttpLunchMoneyClient({ apiKey: "test" })
+    await client.setTags(10, ["spending"])
+    asked.length = 0
+    await client.setTags(11, ["spending"])
+    expect(asked).toContain("GET tags")
+    expect(asked).not.toContain("POST tags")
   })
 })

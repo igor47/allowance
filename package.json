@@ -18,10 +18,10 @@
   "devDependencies": {
     "@biomejs/biome": "latest",
     "@types/bun": "latest",
-    "@types/luxon": "^3.7.1",
-    "linkedom": "^0.18.12"
+    "@types/luxon": "^3.7.5",
+    "linkedom": "^0.18.13"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }

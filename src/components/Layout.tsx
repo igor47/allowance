@@ -19,7 +19,7 @@ export const Layout = ({ title, user, nav, page, children }: PropsWithChildren<L
       <title>{title}</title>
       <link
         rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
       />
       <link rel="stylesheet" href="/static/app.css" />
       {/*
@@ -37,7 +37,7 @@ export const Layout = ({ title, user, nav, page, children }: PropsWithChildren<L
       <script src="/static/htmx.min.js" defer />
       {/* Popper is inside the bundle; it is what positions the chart tooltips. */}
       <script
-        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
         defer
       />
       <script src="/static/app.js" defer />

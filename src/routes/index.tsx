@@ -247,6 +247,36 @@ dashboardRoutes.get("/transactions", async (c) => {
 })
 
 /**
+ * A transaction's note, written to Lunch Money. Returns the row alone: a note
+ * moves no figure, so there is nothing out of band to send with it.
+ */
+dashboardRoutes.post("/transactions/:id/note", async (c) => {
+  const id = Number.parseInt(c.req.param("id"), 10)
+  if (Number.isNaN(id)) return c.text("bad transaction id", 400)
+  const body = await c.req.parseBody()
+  if (typeof body.notes !== "string") return c.text("no notes in the form", 400)
+  const notes = body.notes.trim()
+
+  const view = viewOf(c, c.var.today(), c.var.config.historyStart)
+  const before = await c.var.service.build(view.asOf)
+  if (!before.transactions.some((entry) => entry.txn.id === id))
+    return c.text("transaction not found in the current period", 404)
+
+  await c.var.service.setNotes(id, notes)
+
+  const after = await c.var.service.build(view.asOf)
+  const updated = after.transactions.find((entry) => entry.txn.id === id)
+  if (!updated) return c.text("transaction disappeared", 500)
+  return c.html(
+    <TransactionRow
+      entry={updated}
+      month={view.isCurrent ? undefined : view.month}
+      people={c.var.config.people}
+    />
+  )
+})
+
+/**
  * Lunch Money's reviewed flag, mirrored from a classifying tag.
  *
  * Classifying a row is reviewing it, so the flag goes on with the tag and

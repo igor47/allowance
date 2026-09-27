@@ -253,6 +253,18 @@ export const TransactionRow = ({
           <span class="fw-medium text-truncate" title={descriptor ?? name}>
             {name}
           </span>
+          {/*
+            Faint until hovered, so a list of them is not a column of pencils,
+            and always present, since a phone has no hover to reveal it with.
+          */}
+          <button
+            type="button"
+            class="btn btn-link note-edit"
+            title={txn.notes ? "Edit the note" : "Add a note"}
+            aria-label={txn.notes ? "Edit the note" : "Add a note"}
+          >
+            ✎
+          </button>
         </div>
         <div class="txn-line small text-secondary" title={meta}>
           {facts.length > 0 ? <span class="txn-facts">{facts.join(" · ")}</span> : null}
@@ -262,6 +274,35 @@ export const TransactionRow = ({
             <span class="fst-italic txn-reason">{classification.reason}</span>
           )}
         </div>
+        {txn.notes ? (
+          <div class="txn-note small" title={txn.notes}>
+            {txn.notes}
+          </div>
+        ) : null}
+        {/*
+          Rendered hidden on every row and opened by `app.js`, so starting to
+          type costs no round trip. Enter or leaving the field saves; Escape
+          puts it back. An empty note clears the one in Lunch Money.
+
+          No hx-sync with the tag buttons: a note and the tags are separate
+          fields of the transaction, so the two writes cannot undo each other.
+        */}
+        <form
+          class="note-form d-none"
+          hx-post={`/transactions/${txn.id}/note${month ? `?month=${month}` : ""}`}
+          hx-target="closest tr"
+          hx-swap="outerHTML"
+        >
+          <input
+            type="text"
+            name="notes"
+            class="form-control form-control-sm"
+            value={txn.notes ?? ""}
+            placeholder="Add a note"
+            aria-label="Note"
+            autocomplete="off"
+          />
+        </form>
       </td>
       <td class={`text-end tabular text-nowrap align-top${credit ? " text-success" : ""}`}>
         {cents(classification.amount)}

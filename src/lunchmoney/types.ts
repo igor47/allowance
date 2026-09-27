@@ -154,6 +154,8 @@ export interface LunchMoneyClient {
    * write when `status` is given — it rides on the one PUT, so it is free.
    */
   setTags(transactionId: number, tags: string[], status?: ReviewStatus): Promise<void>
+  /** Replaces the note. An empty string clears it, which is how the API says so. */
+  setNotes(transactionId: number, notes: string): Promise<void>
   /** Queue a background pull from Plaid. Asynchronous; results arrive later. */
   triggerFetch(): Promise<void>
 }

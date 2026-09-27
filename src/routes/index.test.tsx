@@ -415,6 +415,49 @@ describe("tagging", () => {
   })
 })
 
+describe("notes", () => {
+  const withANote = () =>
+    august().charge({ on: "2026-08-13", amount: 30, payee: "A Florist", notes: "for Sam" })
+  const florist = (world: ReturnType<typeof august>) =>
+    world.transactions.find((t) => t.payee === "A Florist")?.id as number
+
+  test("a row shows its note, and one without has none to show", async () => {
+    const world = withANote()
+    const page = await dashboard(world, "?filter=all")
+    expect(page.row(florist(world))?.note).toBe("for Sam")
+    expect(page.rows.filter((r) => r.note !== "")).toHaveLength(1)
+  })
+
+  test("saving one writes it to Lunch Money and returns the row wearing it", async () => {
+    const world = august()
+    const id = world.transactions.find((t) => t.payee === "A Restaurant")?.id as number
+    const session = visit(world)
+    const result = await session.note(id, "  split with Sam  ")
+    expect(result.status).toBe(200)
+    // Trimmed, since the edges of a typed line are never meant.
+    expect(session.client.notes.get(id)).toBe("split with Sam")
+    expect(result.row?.note).toBe("split with Sam")
+    // A note moves no figure, so nothing else comes back with it.
+    expect(result.swapsOutOfBand).toEqual([])
+    // And it survives into the next page, from the cache.
+    expect((await session.dashboard("?filter=all")).row(id)?.note).toBe("split with Sam")
+  })
+
+  test("saving an empty one clears it", async () => {
+    const world = withANote()
+    const session = visit(world)
+    const result = await session.note(florist(world), "")
+    expect(session.client.notes.get(florist(world))).toBe("")
+    expect(result.row?.note).toBe("")
+  })
+
+  test("a row outside the period is refused before any write", async () => {
+    const session = visit(august())
+    expect((await session.note(999999, "hello")).status).toBe(404)
+    expect(session.client.notes.size).toBe(0)
+  })
+})
+
 describe("deposits", () => {
   const withARefund = () => august().refund({ on: "2026-08-09", amount: 40, payee: "A Retailer" })
 

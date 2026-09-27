@@ -255,6 +255,13 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
     if (created) this.lookups = null
   }
 
+  async setNotes(transactionId: number, notes: string): Promise<void> {
+    await this.request(`transactions/${transactionId}`, {
+      method: "PUT",
+      body: JSON.stringify({ notes }),
+    })
+  }
+
   private async tagIdsFor(names: string[]): Promise<{ ids: number[]; created: boolean }> {
     if (names.length === 0) return { ids: [], created: false }
     const existing = new Map(

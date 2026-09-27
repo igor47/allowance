@@ -33,6 +33,8 @@ export interface Row {
   facts: string
   /** Why it was classified the way it was. */
   reason: string
+  /** Lunch Money's note, when there is one. */
+  note: string
   /** True when the bucket pill is outlined: the app inferred it, nobody said so. */
   inferred: boolean
   /** As rendered, to the cent. */
@@ -63,6 +65,7 @@ function rowOf(tr: Element): Row {
     descriptor: title === text(payee) ? "" : title,
     facts: text(tr.querySelector(".txn-facts")),
     reason: text(tr.querySelector(".txn-reason")),
+    note: text(tr.querySelector(".txn-note")),
     inferred: ((cells[3]?.querySelector(".badge")?.getAttribute("class") ?? "") as string).includes(
       "inferred"
     ),
@@ -409,6 +412,15 @@ export class Session {
             body: new URLSearchParams({ shown }).toString(),
           }
     const response = await this.app.post(`/transactions/${id}/tag?tag=${tag}${query}`, form)
+    return new TagResult(response.status, await this.doc(response))
+  }
+
+  /** Save a note, as the row's form does on Enter. Returns the row that comes back. */
+  async note(id: number, notes: string, query = ""): Promise<TagResult> {
+    const response = await this.app.post(`/transactions/${id}/note${query}`, {
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ notes }).toString(),
+    })
     return new TagResult(response.status, await this.doc(response))
   }
 

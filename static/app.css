@@ -268,6 +268,39 @@
   min-width: 0;
 }
 
+/*
+ * The pencil after the payee: faint at rest, so a list of them is not a
+ * column of pencils, and never absent, since a phone cannot hover.
+ */
+.note-edit {
+  padding: 0 0.15rem;
+  line-height: 1;
+  font-size: 0.85rem;
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+  opacity: 0.35;
+}
+
+.note-edit:hover,
+.note-edit:focus-visible,
+tr:hover .note-edit {
+  opacity: 1;
+  color: var(--bs-body-color);
+}
+
+/* A note is something a person wrote, so it reads in the body colour. */
+.txn-note {
+  line-height: 1.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-form {
+  margin-top: 0.2rem;
+  max-width: 32rem;
+}
+
 /* The second line's parts, spaced like the list of facts they are. */
 .txn-line > * + * {
   margin-left: 0.4rem;

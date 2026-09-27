@@ -86,6 +86,8 @@ export interface ChargeOptions {
   /** Dollars. Positive is money leaving, on every verb. */
   amount: number
   payee?: string
+  /** Lunch Money's free-text note. */
+  notes?: string
   tags?: string[]
   account?: TestAccount
   /** When the bank posted it, if that is not the day it was made. */
@@ -374,6 +376,7 @@ function chargeOverrides(options: ChargeOptions, amount: number): TxnOverrides {
     exclude_from_totals: options.excluded ?? false,
     is_pending: options.pending ?? false,
     recurring_id: options.recurring ? 1 : null,
+    notes: options.notes ?? null,
     ...accountFields(options.account ?? CARD),
     // Only written when it differs, so the "posted lags the swipe" cases are
     // visible in the scenario rather than implied by a metadata blob.

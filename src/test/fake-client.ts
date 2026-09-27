@@ -18,6 +18,8 @@ import type { World } from "./world"
  */
 export class FakeLunchMoneyClient implements LunchMoneyClient {
   readonly writes: { transactionId: number; tags: string[] }[] = []
+  /** Notes as last written, "" meaning cleared. Kept apart from `writes`. */
+  readonly notes = new Map<number, string>()
   /** Lunch Money's reviewed flag, as last written. Kept apart from `writes`. */
   readonly statuses = new Map<number, ReviewStatus>()
   private readonly store: LmTransaction[]
@@ -68,5 +70,12 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
       target.status = status
       this.statuses.set(transactionId, status)
     }
+  }
+
+  async setNotes(transactionId: number, notes: string): Promise<void> {
+    const target = this.store.find((t) => t.id === transactionId)
+    if (!target) throw new Error(`no such transaction: ${transactionId}`)
+    target.notes = notes === "" ? null : notes
+    this.notes.set(transactionId, notes)
   }
 }

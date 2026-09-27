@@ -126,6 +126,13 @@ export class DashboardService {
     )
   }
 
+  async setNotes(transactionId: number, notes: string): Promise<void> {
+    await this.client.setNotes(transactionId, notes)
+    this.cache.mutate<LmTransaction[]>("txns:", (txns) =>
+      txns.map((t) => (t.id === transactionId ? { ...t, notes: notes === "" ? null : notes } : t))
+    )
+  }
+
   private async load(start: IsoDate, end: IsoDate) {
     const [transactions, balances] = await Promise.all([
       this.cache.fetch(`txns:${start}:${end}`, () => this.client.transactions(start, end)),

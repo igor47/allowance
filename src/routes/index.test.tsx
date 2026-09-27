@@ -856,9 +856,8 @@ describe("phone layout", () => {
   })
 
   test("a line that had to be cut carries the whole string in its title", async () => {
-    // Every line in the description cell is one line, so a long descriptor
-    // ends in an ellipsis. The `title` is what makes that reversible, and it
-    // is only worth having on the lines that can actually lose text.
+    // Both lines of the description cell are one line, so a long one ends in
+    // an ellipsis. The `title` is what makes that reversible.
     const long = "A GROCERY COOP 1745 EXAMPLE ST SAN FRANCISCO CA 94103"
     const page = await dashboard(
       august().charge({
@@ -873,19 +872,14 @@ describe("phone layout", () => {
     const row = Array.from(page.doc.querySelectorAll("tbody tr")).find((tr) =>
       tr.textContent?.includes("Grocery")
     )
-    expect(row?.querySelector(".fw-medium")?.getAttribute("title")).toBe("A Grocery Cooperative")
-    const lines = Array.from(row?.querySelectorAll(".txn-line") ?? [])
-    expect(lines[0]?.getAttribute("title")).toBe(long)
-    expect(lines[1]?.getAttribute("title")).toBe("Groceries")
+    // The raw descriptor is no longer a line of its own; it is the payee's
+    // hover, which is where someone asking "what is this" already points.
+    expect(row?.querySelector(".fw-medium")?.getAttribute("title")).toBe(long)
+    expect(row?.textContent).not.toContain(long)
+    const [meta] = Array.from(row?.querySelectorAll(".txn-line") ?? [])
     // The reason is not printed on a row this ordinary, but the line still
     // carries it, so the explanation is a hover away rather than gone.
-    expect(lines[2]?.getAttribute("title")).toBe(`untagged on ${CARD}`)
-    // A line with nothing in it collapses on a phone, so it must stay empty —
-    // a stray whitespace node from the markup would defeat `.txn-line:empty`.
-    const bare = Array.from(page.doc.querySelectorAll(".txn-line")).find(
-      (l) => (l.textContent ?? "") === ""
-    )
-    expect(bare?.hasAttribute("title")).toBe(false)
+    expect(meta?.getAttribute("title")).toBe(`Groceries · ${CARD} · untagged on ${CARD}`)
   })
 
   test("the sync menu only refuses to wrap on its label rows", async () => {

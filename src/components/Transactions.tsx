@@ -212,10 +212,14 @@ export const TransactionRow = ({
     details.channel === "online" ? "online" : null,
     details.place,
   ].filter(Boolean)
+  // Everything on the second line, whole, for when the line runs out of room.
+  const meta = [...facts, account, txn.is_pending ? "pending" : null, classification.reason]
+    .filter(Boolean)
+    .join(" · ")
 
-  // Every row renders the same three meta lines whether or not it is tagged.
-  // Tagging changes the reason text, and letting that reflow the row made the
-  // rest of the list jump under the cursor between clicks.
+  // The reason shares a line with the facts, so a tag that rewrites it
+  // changes what the line says and never how many lines the row has —
+  // letting it reflow made the rest of the list jump under the cursor.
   return (
     <tr class={classes} id={`txn-${txn.id}`}>
       <td class="text-secondary small text-nowrap align-top">
@@ -229,42 +233,33 @@ export const TransactionRow = ({
         </div>
       </td>
       {/*
-        Every line here is one line: `text-truncate` on the payee and `nowrap`
-        on the three below it, so a long descriptor ends in an ellipsis rather
-        than growing the row. `title` is what makes the cut reversible — the
-        whole string is a hover away, on the four lines that can lose text.
+        Two lines, and a third only for a note. What the payee is, on the
+        first; everything the app knows about it, on the second — category,
+        where, which account, whether it has settled, and why it was filed
+        where it was. They used to be four lines, and the row had more
+        furniture than the transaction had facts.
 
-        Native rather than a Bootstrap tooltip on purpose. `app.js` disposes
-        and rebuilds every tooltip instance on each htmx settle, so four per
-        row over a few hundred rows would make each tag click pay for the whole
-        list. A `title` costs nothing and survives the swap by being markup.
+        The raw statement descriptor, which used to be a line of its own that
+        read as unexplained noise, is the payee's `title`: it is there for the
+        one row in fifty where the cleaned-up name is not enough.
+
+        Native `title` rather than a Bootstrap tooltip on purpose. `app.js`
+        disposes and rebuilds every tooltip instance on each htmx settle, so
+        several per row over a few hundred rows would make each tag click pay
+        for the whole list. A `title` costs nothing and survives the swap.
       */}
       <td>
-        <div class="fw-medium text-truncate" title={name}>
-          {name}
+        <div class="txn-payee">
+          <span class="fw-medium text-truncate" title={descriptor ?? name}>
+            {name}
+          </span>
         </div>
-        <div class="txn-line small text-secondary font-monospace" title={descriptor ?? undefined}>
-          {descriptor}
-        </div>
-        <div class="txn-line small text-secondary" title={facts.join(" · ")}>
-          {facts.join(" · ")}
-        </div>
-        {/*
-          The account is named on every row. It used to be suppressed on the
-          statement card, on the reasoning that rows there are the common case
-          — true of a household with one card, and misleading with two, where
-          it made two identical kinds of row look different for a reason
-          nothing on screen explained.
-
-          This line keeps its height whatever it holds: the badge is always
-          here, and `title` still carries the full reason even when the row
-          does not print it, so nothing is lost to the reader who asks.
-        */}
-        <div class="txn-line small" title={classification.reason}>
-          <span class="badge text-bg-dark border border-secondary me-1">{account}</span>
-          {txn.is_pending ? <span class="badge text-bg-warning me-1">pending</span> : null}
+        <div class="txn-line small text-secondary" title={meta}>
+          {facts.length > 0 ? <span class="txn-facts">{facts.join(" · ")}</span> : null}
+          <span class="badge text-bg-dark border border-secondary txn-account">{account}</span>
+          {txn.is_pending ? <span class="badge text-bg-warning">pending</span> : null}
           {classification.restated ? null : (
-            <span class="text-secondary fst-italic">{classification.reason}</span>
+            <span class="fst-italic txn-reason">{classification.reason}</span>
           )}
         </div>
       </td>

@@ -260,9 +260,17 @@
   text-overflow: ellipsis;
 }
 
-.txn-line.font-monospace {
-  font-size: 0.72rem;
-  opacity: 0.8;
+/* The payee, and room after it for what follows the name on its line. */
+.txn-payee {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* The second line's parts, spaced like the list of facts they are. */
+.txn-line > * + * {
+  margin-left: 0.4rem;
 }
 
 /* Bootstrap's spinner is display:inline-block; htmx hides indicators by
@@ -508,13 +516,7 @@
     margin-left: 0.35rem;
   }
 
-  /*
-   * A meta line with nothing in it costs 1.15rem of a 390px screen, and a row
-   * has three of them. Holding that space is what stops the row moving under
-   * the finger when a tag rewrites the reason — but the reason line is the
-   * only one that is ever rewritten, so the other two can collapse without
-   * bringing the jump back.
-   */
+  /* An empty line or posted date costs height a phone does not have. */
   .txn-line:empty,
   .txn-posted:empty {
     display: none;

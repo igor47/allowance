@@ -27,9 +27,9 @@ export interface Row {
   /** The posted date, shown only when it differs from the date. */
   posted: string
   payee: string
-  /** The statement descriptor line, when it says more than the payee. */
+  /** The statement descriptor, on the payee's hover, when it says more than the payee. */
   descriptor: string
-  /** Category, channel, place — the middle meta line. */
+  /** Category, channel, place — the start of the line under the payee. */
   facts: string
   /** Why it was classified the way it was. */
   reason: string
@@ -51,23 +51,24 @@ export interface Row {
 
 function rowOf(tr: Element): Row {
   const cells = all(tr, "td")
-  const lines = all(tr, ".txn-line")
-  const chip = tr.querySelector(".txn-line .badge")
+  const payee = tr.querySelector(".txn-payee .fw-medium")
+  const title = payee?.getAttribute("title") ?? ""
   const classes = tr.getAttribute("class") ?? ""
   return {
     id: Number.parseInt((tr.getAttribute("id") ?? "txn-0").slice(4), 10),
     date: text(cells[0]).split("↳")[0]?.trim() ?? "",
     posted: text(tr.querySelector(".txn-posted")).replace(/^↳\s*/, ""),
-    payee: text(cells[1]?.querySelector(".fw-medium")),
-    descriptor: text(lines[0]),
-    facts: text(lines[1]),
-    reason: text(tr.querySelector(".txn-line .fst-italic")),
+    payee: text(payee),
+    // Only when it says more than the payee, as the row itself decides.
+    descriptor: title === text(payee) ? "" : title,
+    facts: text(tr.querySelector(".txn-facts")),
+    reason: text(tr.querySelector(".txn-reason")),
     inferred: ((cells[3]?.querySelector(".badge")?.getAttribute("class") ?? "") as string).includes(
       "inferred"
     ),
     amount: text(cells[2]),
     badge: text(cells[3]?.querySelector(".badge")),
-    account: chip ? text(chip) : "",
+    account: text(tr.querySelector(".txn-account")),
     unreviewed: classes.includes("unreviewed"),
     notCounted: classes.includes("not-counted"),
     activeTags: all(tr, "button.tag-btn")

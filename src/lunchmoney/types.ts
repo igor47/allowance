@@ -140,13 +140,20 @@ export interface LmRecurringItem {
   missing_dates_within_range: string[] | null
 }
 
+/** Lunch Money's reviewed flag, which is theirs and not the app's `reviewed`. */
+export type ReviewStatus = "reviewed" | "unreviewed"
+
 export interface LunchMoneyClient {
   transactions(start: string, end: string): Promise<LmTransaction[]>
   recurringItems(start: string, end: string): Promise<LmRecurringItem[]>
   /** Every account with a balance — linked and manual alike. */
   accounts(): Promise<LmAccount[]>
   tags(): Promise<LmTag[]>
-  setTags(transactionId: number, tags: string[]): Promise<void>
+  /**
+   * Replaces the tags, and sets Lunch Money's own reviewed flag in the same
+   * write when `status` is given — it rides on the one PUT, so it is free.
+   */
+  setTags(transactionId: number, tags: string[], status?: ReviewStatus): Promise<void>
   /** Queue a background pull from Plaid. Asynchronous; results arrive later. */
   triggerFetch(): Promise<void>
 }

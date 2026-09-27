@@ -15,7 +15,13 @@ import { addDays, endOfMonth, type IsoDate, startOfMonth } from "../domain/dates
 import { type Freshness, freshness } from "../domain/freshness"
 import { findTransfers, statementAccounts, unknownAccounts } from "../domain/policy"
 import type { Cache } from "../lunchmoney/cache"
-import type { LmAccount, LmTag, LmTransaction, LunchMoneyClient } from "../lunchmoney/types"
+import type {
+  LmAccount,
+  LmTag,
+  LmTransaction,
+  LunchMoneyClient,
+  ReviewStatus,
+} from "../lunchmoney/types"
 
 export interface CashAccount {
   name: string
@@ -105,8 +111,8 @@ export class DashboardService {
    * the write succeeds rather than before, so a failed write never leaves the
    * dashboard showing a tag that Lunch Money does not have.
    */
-  async setTags(transactionId: number, tags: string[]): Promise<void> {
-    await this.client.setTags(transactionId, tags)
+  async setTags(transactionId: number, tags: string[], status?: ReviewStatus): Promise<void> {
+    await this.client.setTags(transactionId, tags, status)
     const applied: LmTag[] = tags.map((name, i) => ({
       id: -(i + 1),
       name,
@@ -114,7 +120,9 @@ export class DashboardService {
       archived: false,
     }))
     this.cache.mutate<LmTransaction[]>("txns:", (txns) =>
-      txns.map((t) => (t.id === transactionId ? { ...t, tags: applied } : t))
+      txns.map((t) =>
+        t.id === transactionId ? { ...t, tags: applied, ...(status ? { status } : {}) } : t
+      )
     )
   }
 

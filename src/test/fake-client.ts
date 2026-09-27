@@ -4,6 +4,7 @@ import type {
   LmTag,
   LmTransaction,
   LunchMoneyClient,
+  ReviewStatus,
 } from "../lunchmoney/types"
 import type { World } from "./world"
 
@@ -17,6 +18,8 @@ import type { World } from "./world"
  */
 export class FakeLunchMoneyClient implements LunchMoneyClient {
   readonly writes: { transactionId: number; tags: string[] }[] = []
+  /** Lunch Money's reviewed flag, as last written. Kept apart from `writes`. */
+  readonly statuses = new Map<number, ReviewStatus>()
   private readonly store: LmTransaction[]
   private readonly balances: LmAccount[]
   private readonly recurring: LmRecurringItem[]
@@ -56,10 +59,14 @@ export class FakeLunchMoneyClient implements LunchMoneyClient {
     this.fetches += 1
   }
 
-  async setTags(transactionId: number, tags: string[]): Promise<void> {
+  async setTags(transactionId: number, tags: string[], status?: ReviewStatus): Promise<void> {
     const target = this.store.find((t) => t.id === transactionId)
     if (!target) throw new Error(`no such transaction: ${transactionId}`)
     target.tags = tags.map((name, i) => ({ id: i + 1, name, description: null, archived: false }))
     this.writes.push({ transactionId, tags })
+    if (status) {
+      target.status = status
+      this.statuses.set(transactionId, status)
+    }
   }
 }

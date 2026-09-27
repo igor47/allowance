@@ -15,7 +15,8 @@ import {
 import type { Person } from "../config"
 import { endOfMonth, type IsoDate } from "../domain/dates"
 import { tagNames } from "../domain/policy"
-import { nextTags, parseTagAction } from "../domain/tagging"
+import { nextTags, parseTagAction, type TagAction } from "../domain/tagging"
+import type { LmTransaction, ReviewStatus } from "../lunchmoney/types"
 import { applyFilter, isPerson, isView, summarise } from "../services/dashboard"
 
 export const dashboardRoutes = new Hono<AppEnv>()
@@ -246,6 +247,28 @@ dashboardRoutes.get("/transactions", async (c) => {
 })
 
 /**
+ * Lunch Money's reviewed flag, mirrored from a classifying tag.
+ *
+ * Classifying a row is reviewing it, so the flag goes on with the tag and
+ * comes off with it — the row is back in this app's queue then, and leaving it
+ * ticked in Lunch Money would say the opposite. A person tag says whose it
+ * was, not what it was, and leaves the flag alone.
+ *
+ * Never on a pending row. The spec says every pending transaction is
+ * reported unreviewed whatever it was told, so the flag could not stick, and
+ * nobody has checked whether the write is refused instead — which would take
+ * the tag down with it.
+ */
+function reviewStatusFor(
+  txn: LmTransaction,
+  action: TagAction,
+  tags: string[]
+): ReviewStatus | undefined {
+  if (action.kind !== "classify" || txn.is_pending) return undefined
+  return tags.includes(action.tag) ? "reviewed" : "unreviewed"
+}
+
+/**
  * Tagging. Returns the updated row plus out-of-band swaps for the summary, so
  * one click both reclassifies the transaction and moves the headline number.
  */
@@ -253,7 +276,7 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
   const id = Number.parseInt(c.req.param("id"), 10)
   if (Number.isNaN(id)) return c.text("bad transaction id", 400)
 
-  let action: ReturnType<typeof parseTagAction>
+  let action: TagAction
   try {
     action = parseTagAction(
       c.req.query("tag") ?? "",
@@ -277,7 +300,8 @@ dashboardRoutes.post("/transactions/:id/tag", async (c) => {
   const target = before.transactions.find((entry) => entry.txn.id === id)
   if (!target) return c.text("transaction not found in the current period", 404)
 
-  await c.var.service.setTags(id, nextTags(tagNames(target.txn), action))
+  const tags = nextTags(tagNames(target.txn), action)
+  await c.var.service.setTags(id, tags, reviewStatusFor(target.txn, action, tags))
 
   const after = await c.var.service.build(view.asOf)
   const updated = after.transactions.find((entry) => entry.txn.id === id)

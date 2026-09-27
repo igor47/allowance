@@ -55,6 +55,7 @@ describe("the recurring link", () => {
  */
 function stubbedApi(tags: { id: number; name: string }[]) {
   const asked: string[] = []
+  const bodies: unknown[] = []
   let nextId = 100
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const path = String(input).replace("https://api.lunchmoney.dev/v2/", "")
@@ -67,7 +68,10 @@ function stubbedApi(tags: { id: number; name: string }[]) {
       tags.push(tag)
       return json(tag)
     }
-    if (method === "PUT") return json({})
+    if (method === "PUT") {
+      bodies.push(JSON.parse(String(init?.body)))
+      return json({})
+    }
     const empty: Record<string, unknown> = {
       categories: { categories: [] },
       tags: { tags },
@@ -77,7 +81,7 @@ function stubbedApi(tags: { id: number; name: string }[]) {
     }
     return json(empty[path])
   }) as typeof fetch
-  return asked
+  return { asked, bodies }
 }
 
 describe("tagging", () => {
@@ -89,7 +93,7 @@ describe("tagging", () => {
   // Dropping the join tables after every write made each click cost five
   // extra requests, which a triage session turned into 429 backoffs.
   test("a tag that already exists costs one request after the first", async () => {
-    const asked = stubbedApi([{ id: 1, name: "spending" }])
+    const { asked } = stubbedApi([{ id: 1, name: "spending" }])
     const client = new HttpLunchMoneyClient({ apiKey: "test" })
     await client.setTags(10, ["spending"])
     asked.length = 0
@@ -97,8 +101,17 @@ describe("tagging", () => {
     expect(asked).toEqual(["PUT transactions/11"])
   })
 
+  test("the reviewed flag rides on the same write", async () => {
+    const { asked, bodies } = stubbedApi([{ id: 1, name: "spending" }])
+    const client = new HttpLunchMoneyClient({ apiKey: "test" })
+    await client.setTags(10, ["spending"], "reviewed")
+    await client.setTags(11, ["spending"])
+    expect(asked.filter((a) => a.startsWith("PUT"))).toHaveLength(2)
+    expect(bodies).toEqual([{ tag_ids: [1], status: "reviewed" }, { tag_ids: [1] }])
+  })
+
   test("a tag made just now is read back, so the tables are fetched again", async () => {
-    const asked = stubbedApi([])
+    const { asked } = stubbedApi([])
     const client = new HttpLunchMoneyClient({ apiKey: "test" })
     await client.setTags(10, ["spending"])
     asked.length = 0

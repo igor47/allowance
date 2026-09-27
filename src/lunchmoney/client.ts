@@ -12,7 +12,14 @@
  * untouched by the migration.
  */
 
-import type { LmAccount, LmRecurringItem, LmTag, LmTransaction, LunchMoneyClient } from "./types"
+import type {
+  LmAccount,
+  LmRecurringItem,
+  LmTag,
+  LmTransaction,
+  LunchMoneyClient,
+  ReviewStatus,
+} from "./types"
 import type {
   V2Category,
   V2ManualAccount,
@@ -234,11 +241,11 @@ export class HttpLunchMoneyClient implements LunchMoneyClient {
    * v2 takes tag *ids*, not names, and will not create a tag on the way past
    * as v1 did — so a name with no tag behind it has to become one first.
    */
-  async setTags(transactionId: number, tags: string[]): Promise<void> {
+  async setTags(transactionId: number, tags: string[], status?: ReviewStatus): Promise<void> {
     const { ids, created } = await this.tagIdsFor(tags)
     await this.request(`transactions/${transactionId}`, {
       method: "PUT",
-      body: JSON.stringify({ tag_ids: ids }),
+      body: JSON.stringify(status ? { tag_ids: ids, status } : { tag_ids: ids }),
     })
     // A tag made just now is missing from the held table, and the next read
     // would hydrate it as nothing. Only then is the table worth dropping: it

@@ -309,6 +309,49 @@ describe("tagging", () => {
     expect(result.row?.badge).toBe("recurring")
   })
 
+  describe("Lunch Money's own reviewed flag", () => {
+    test("goes on with a classifying tag", async () => {
+      const world = august()
+      const id = anUntaggedCharge(world)
+      const session = visit(world)
+      await session.tag(id, "spending", "&set=on")
+      expect(session.client.statuses.get(id)).toBe("reviewed")
+    })
+
+    // The row is back in this app's queue, so a tick in Lunch Money would
+    // say the opposite of what the list does.
+    test("comes off with it", async () => {
+      const world = august()
+      const id = world.transactions.find((t) => t.payee === "A Utility")?.id as number
+      const session = visit(world)
+      await session.tag(id, "recurring", "&set=off")
+      expect(session.client.statuses.get(id)).toBe("unreviewed")
+    })
+
+    test("is left alone by a person tag", async () => {
+      const world = august()
+      const id = anUntaggedCharge(world)
+      const session = visit(world)
+      await session.tag(id, "sam", "&set=on")
+      expect(session.client.statuses.has(id)).toBe(false)
+    })
+
+    // Lunch Money reports a pending row as unreviewed whatever it is told.
+    test("is not written to a pending row", async () => {
+      const world = august().charge({
+        on: "2026-08-13",
+        amount: 20,
+        payee: "A Bakery",
+        pending: true,
+      })
+      const id = world.transactions.find((t) => t.payee === "A Bakery")?.id as number
+      const session = visit(world)
+      await session.tag(id, "spending", "&set=on")
+      expect(session.client.writes.at(-1)).toEqual({ transactionId: id, tags: ["spending"] })
+      expect(session.client.statuses.has(id)).toBe(false)
+    })
+  })
+
   test("classifying tags are mutually exclusive", async () => {
     const world = august()
     const session = visit(world)

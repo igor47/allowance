@@ -166,6 +166,22 @@ describe("dashboard", () => {
     expect(legs.every((l) => l.inferred)).toBe(true)
   })
 
+  test("a dimmed row is one that does not count, whichever way the money went", async () => {
+    // Both legs of a move are dimmed alike. The arriving one used to stay
+    // bright only because it was a credit, which made two halves of one
+    // transfer look like different kinds of thing.
+    const page = await dashboard(
+      august().transfer({ on: "2026-08-11", amount: 300, from: CHECKING, to: SAVINGS }),
+      "?filter=all"
+    )
+    const legs = page.rows.filter((r) => r.badge === "transfer")
+    expect(legs.map((l) => l.notCounted)).toEqual([true, true])
+    // Payroll does not count either, and stays bright: money arriving is the
+    // one thing on this list worth seeing that is not spending.
+    expect(page.rows.find((r) => r.payee === "PAYROLL")?.notCounted).toBe(false)
+    expect(page.rows.find((r) => r.payee === "A Grocer")?.notCounted).toBe(false)
+  })
+
   test("the statement total includes charges that posted after the cycle opened", async () => {
     // The API filters on the authorized date while the cycle is bucketed on the
     // posted date, so the fetch window has to reach back past the cycle start

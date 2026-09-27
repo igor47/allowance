@@ -189,9 +189,16 @@ export const TransactionRow = ({
   const pill = classification.reviewed ? `badge ${style.solid}` : `badge inferred ${style.inferred}`
   const taggable = classification.taggable
   const credit = classification.amount < 0
+  /*
+   * Dimmed means "not in the allowance". Deposits are the exception, because
+   * money arriving is worth seeing even though it is not spending. The
+   * exception used to be every credit, which lit the arriving leg of a
+   * transfer and dimmed the leaving one — two halves of one movement looking
+   * like two kinds of thing, for no reason the screen could explain.
+   */
   const classes = [
     isReviewItem(entry) ? "unreviewed" : "",
-    classification.counts || credit ? "" : "not-counted",
+    classification.counts || classification.bucket === "deposit" ? "" : "not-counted",
   ]
     .filter(Boolean)
     .join(" ")
